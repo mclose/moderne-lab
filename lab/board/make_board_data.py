@@ -107,7 +107,7 @@ def probe(name: str, path: pathlib.Path | None = None) -> dict:
 
 def versions(patch: pathlib.Path) -> tuple[str, str]:
     """commons-configuration2 and commons-text versions a patch sets ('' if it doesn't set one)."""
-    t = read(patch)
+    t = re.sub(r"^\+\s*<!--.*$", "+", read(patch), flags=re.M)  # a version named in an XML comment is not a choice
     cfg = sorted(set(re.findall(r"^\+.*commons-configuration2(?:\.version)?>?\s*<?.*?(2\.\d+\.\d+)", t, re.M)))
     txt = sorted(set(re.findall(r"^\+.*commons-text\.version>(1\.\d+(?:\.\d+)?)<", t, re.M)
                      + re.findall(r"^\+\s*<version>(1\.1\d\.\d+)</version>", t, re.M)))
@@ -118,9 +118,14 @@ def versions(patch: pathlib.Path) -> tuple[str, str]:
 
 
 def ran_jar(name: str) -> str:
-    """Did the agent itself run the app jar? From its shared transcript: a shell line starting java -jar."""
+    """Did the agent itself run the app? From its shared transcript, either signal counts: a shell command that runs
+    the jar (some agents send its output to a file), or Spring Boot's startup line for the app (some wrap the command,
+    e.g. in timeout). Unit tests only print "Started LedgerApplicationTest", so neither comes from the build."""
     t = read(AB2 / f"{name}.session.md")
-    return ("yes" if re.search(r"^\$ .*java\b.*-jar\b", t, re.M) else "no") if t else ""
+    if not t:
+        return ""
+    ran = re.search(r"^\$ .*\bjava\b.*-jar\b", t, re.M) or re.search(r"Started LedgerApplication in ", t)
+    return "yes" if ran else "no"
 
 
 def lab8b_start():
@@ -142,7 +147,7 @@ def lab8b():
     base = probe("baseline")
     rows.append({"run": "baseline", "model": "baseline", "clone": "", "patch": "", "files": "0",
                  "build": read(AB2 / "baseline.verify").strip(), "credits": "0", "seconds": "",
-                 "cfg2": "2.7", "text": "1.9", **base, "recipe_still_changes": ""})
+                 "cfg2": "2.7", "text": "1.9", **base, "recipe_still_changes": "", "agent_ran_jar": ""})
     for name, model, n, p in runs(AB2):
         if model.startswith("start-"):  # the start-the-app variant has its own file
             continue
@@ -150,20 +155,20 @@ def lab8b():
         rows.append({"run": name, "model": model, "clone": n, "patch": sha6(p), "files": files_in(p),
                      "build": read(AB2 / f"{name}.verify").strip(), "credits": credits(AB2 / f"{name}.cost"),
                      "seconds": seconds(AB2 / f"{name}.seconds"), "cfg2": cfg, "text": txt, **probe(name),
-                     "recipe_still_changes": files_in(AB2 / f"X-{name[2:]}.patch")})
+                     "recipe_still_changes": files_in(AB2 / f"X-{name[2:]}.patch"), "agent_ran_jar": ran_jar(name)})
     bp = AB2 / "B-clone1.patch"
     cfg, txt = versions(bp)
     for n in range(1, 6):
         rows.append({"run": f"B-clone{n}", "model": "recipe", "clone": n, "patch": sha6(AB2 / f"B-clone{n}.patch"),
                      "files": files_in(AB2 / f"B-clone{n}.patch"), "build": read(AB2 / "B-clone1.verify").strip(),
                      "credits": "0", "seconds": "", "cfg2": cfg, "text": txt, **probe("B-clone1"),
-                     "recipe_still_changes": ""})
+                     "recipe_still_changes": "", "agent_ran_jar": ""})
     # Trial build from the harness's first run: the recipe's code fixes and commons-text upgrade, with
     # commons-configuration2 left at 2.7 so the app starts. Shows which holes the recipe's code fixes reach.
     rows.append({"run": "B-trial-cfg2-2.7", "model": "recipe, config2 held at 2.7 (trial)", "clone": "",
                  "patch": "", "files": "", "build": "PASS", "credits": "0", "seconds": "", "cfg2": "2.7",
                  "text": "1.15.0", **probe("", LAB / "ab2" / "trial" / "probe-validation.jsonl"),
-                 "recipe_still_changes": ""})
+                 "recipe_still_changes": "", "agent_ran_jar": ""})
     return rows
 
 

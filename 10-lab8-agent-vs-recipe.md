@@ -154,6 +154,8 @@ MODEL=claude-sonnet-5.5 ./ab2.sh agent
 ./ab2.sh panel        # gpt-5.3-codex, grok-4.7, gemini-3.8-flash, five runs each
 PANEL="gpt-6-luna mai-code-1.1-flash kimi-k3 claude-haiku-5.5" ./ab2.sh panel
 ./ab2.sh crosscheck
+# the same ticket plus "start the app" (runs tagged start-<model>)
+VARIANT=start PANEL="claude-sonnet-5.5 gpt-5.3-codex kimi-k3 gpt-6-luna mai-code-1.1-flash claude-haiku-5.5" ./ab2.sh panel
 ```
 
 ### Results
@@ -207,8 +209,41 @@ changes are still correct (the held-at-2.7 build above), and they closed the StA
 missed. DOM XXE, Text4Shell and Zip Slip work as a canary: every started agent run and the recipe's code fixed them,
 which shows the tooling and the probe were working.
 
+### One more line in the prompt: "start the app"
+
+Every startup failure above was invisible to `mvnw verify`, and almost no agent ran the app. So the last round
+(2026-10-31) asks for it. The ticket is unchanged except for one added sentence: "Before you finish, build the app
+jar (ledger-app) and start it to confirm it actually runs." Six models, five fresh runs each, same harness and probe.
+Grok and gemini were left out to fit the month's remaining credits.
+
+Each cell is *without the line → with it*, over the same model's five runs. "Ran the app" is read from the agent's
+own transcript: a shell command that runs the jar, or Spring Boot's startup line for the app.
+
+| Model | App starts | Agent ran the app | Chose config2 2.15.1 | All 7 safe | Credits (5 runs) |
+|---|---|---|---|---|---|
+| claude-sonnet-5.5 | 3 → 5 | 0 → 5 | 2 → 0 | 2 → 1 | 57.4 → 76.8 |
+| gpt-5.3-codex | 5 → 5 | 0 → 5 | 0 → 0 | 0 → 0 | 82.6 → 88.5 |
+| kimi-k3 | 5 → 5 | 0 → 5 | 0 → 0 | 0 → 0 | 97.5 → 154.0 |
+| gpt-6-luna | 5 → 5 | 0 → 5 | 0 → 0 | 0 → 0 | 10.9 → 13.2 |
+| mai-code-1.1-flash | 4 → 5 | 0 → 5 | 1 → 0 | 0 → 0 | 9.5 → 9.6 |
+| claude-haiku-5.5 | 5 → 5 | 0 → 5 | 0 → 3 | 0 → 0 | 7.4 → 12.4 |
+| **all six** | **27 → 30** | **0 → 30** | **3 → 3** | **2 → 1** | **265.3 → 354.5** |
+
+- **The line removed the outage.** Every agent ran the app, and all 30 apps started. As many runs chose 2.15.1 as
+  before (three), but this time they were all Haiku runs that hit `ConfigurationDeniedException` themselves and fixed
+  it: each changed `LedgerSettings` to read `ledger.properties` from the classpath stream instead of a URL, which
+  works inside the Boot jar on the newest version. In one run's words: "Unit tests missed this because they run from
+  `file:` paths."
+- **It didn't widen the scope.** Both unnamed XXEs stayed open in 27 of 30 runs. Sonnet clone1 closed all seven,
+  Sonnet clone5 closed StAX only, and kimi clone2 closed SAX only. Starting the app checks that it runs, not that
+  it's safe.
+- **It costs more.** About a third more credits over the six models, mostly kimi (+58%), because building, starting
+  and probing the app takes more turns.
+- **Still no two patches alike.** 30 runs, 30 different patches.
+
 **The lesson for the course:** the deterministic tool is only as good as the recipe, and the agent is only as good as
-the ticket. Neither replaces running the app. The recipe gave the same result every time, including the same
+the ticket. Neither replaces running the app, and an agent will only run it if asked. One sentence in the ticket was
+enough for every model here. The recipe gave the same result every time, including the same
 production break every time. That is what makes it easy to find and fix once, in one place.
 
 ## Deviations from the brief, and harness bugs found along the way
@@ -236,9 +271,18 @@ production break every time. That is what makes it easy to find and fix once, in
 
 - **The Lab 8b cross-check had the same silent-failure bug** (`|| echo "dry run failed"`, then an empty patch). It
   hadn't fired: the only empty result, grok clone5, has a `BUILD SUCCESS` log. It's fixed the same way as Lab 8's.
-- **Credits don't quite reconcile.** The harness logged 1,046 credits across both labs; GitHub's usage page showed
-  1,086. Grok matches exactly. The gap is mostly 19 credits on GPT-5.6 Terra, which never appears in the harness logs,
-  and about 12 extra Sonnet credits, probably from smoke tests before logging began.
+- **Credits don't quite reconcile.** Before the start-the-app round, the harness had logged 1,046 credits across both
+  labs, and GitHub's usage page showed 1,086. Grok matches exactly. The gap is mostly 19 credits on GPT-5.6 Terra,
+  which never appears in the harness logs, and about 12 extra Sonnet credits, probably from smoke tests before
+  logging began. After the round the harness total is 1,400.8, against a Copilot Pro allowance of 1,500 with no
+  overage budget.
+- **Detecting "the agent ran the app" took two tries.** Matching only a shell line that starts with `java -jar` missed
+  agents that wrapped it (`timeout 25s java -jar …`). Matching only Spring Boot's "Started LedgerApplication" line
+  missed agents that sent the app's output to a file and then sent it real requests. The board accepts either
+  signal. Neither appears in the unit-test output, which prints "Started LedgerApplicationTest". All 30 start-round
+  transcripts show it; of the first 40, only gemini clone3.
+- **An XML comment was read as a version choice.** kimi clone5 wrote "fixed in commons-configuration2 2.8.0+" in a
+  pom comment, and the board script listed 2.8.0 next to the 2.10.1 it actually set. Comment lines are now skipped.
 
 ## The live board
 

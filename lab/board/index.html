@@ -129,7 +129,7 @@
 
     <article class="db-card wide" id="l8b-story">
       <h2>What happened, in order</h2>
-      <p class="note">40 agent runs (eight models, five each) and the recipe.</p>
+      <p class="note">40 agent runs (eight models, five each) and the recipe, then 30 more runs with one extra line in the prompt.</p>
       <ol class="db-story">
         <li><b>Every build passed, agents and recipe alike.</b> <code>./mvnw verify</code> runs the unit tests, but it never starts the app, so it said “done” for every patch.</li>
         <li><b>Then each app was started and attacked, and 12 of 45 wouldn't start.</b> That was all five recipe runs (one patch, five times), 4 grok runs, 2 Sonnet runs and 1 MAI run. Every one of them had upgraded commons-configuration2 to 2.15.1. Every run that chose 2.12.0 or older, or removed the library, started. <span class="see">Chart: “The upgrade that stops the app”.</span></li>
@@ -139,9 +139,10 @@
         <li><b>The agent runs that started fixed what the ticket named.</b> All 33 closed the DOM XXE, Text4Shell, Zip Slip and both SQL injections, including the copy-pasted one the ticket didn't mention. 31 of them left both unnamed XXEs (StAX and SAX) open. Only Sonnet clones 2 and 3 closed all seven.</li>
         <li><b>No two of the 40 agent patches are the same.</b> Haiku and MAI repeated one Log4Shell patch exactly, but here they wrote five different patches each. On a one-line fix they look deterministic; on a real ticket they drift like the rest. Different patches still often led to the same probe result: every Haiku, gpt-6-luna and kimi-k3 run scored the same.</li>
         <li><b>Cost doesn't buy safety here.</b> Haiku's five runs cost 7.4 credits and grok's 320. Both left the unnamed XXEs open, and only grok's broke startup. <span class="see">Chart: “Cost for five runs”.</span></li>
+        <li><b>One line in the prompt stopped the outage, but not the gaps.</b> Asked to start the app before finishing, all 30 runs on six models did, and all 30 started, against 27 of 30 without the line. Three Haiku runs still chose 2.15.1, hit the startup error and fixed the code around it. Both unnamed XXEs stayed open in 27 of 30, and credits went up about a third. <span class="see">Table: “Does one line in the prompt fix it?”.</span></li>
         <li><b>The canary holds.</b> The DOM XXE, Text4Shell and Zip Slip were closed by every run that started and by the recipe's code. So the tooling and the probe were working, and the gaps are real.</li>
       </ol>
-      <p class="db-verdict"><b>Bottom line:</b> nothing here was safe on its own. The recipe was consistent, the same bytes every time, but this time consistently broken. The agents were inconsistent and sometimes right. Neither the agents nor the recipe started the app before calling the job done.</p>
+      <p class="db-verdict"><b>Bottom line:</b> nothing here was safe on its own. The recipe was consistent, the same bytes every time, but this time consistently broken. The agents were inconsistent and sometimes right. Without being told, almost no agent (1 of 40) and not the recipe started the app before calling the job done; told to, every agent did, and the outage went away. Neither change made anyone look past the ticket.</p>
     </article>
 
     <div class="db-grid">
@@ -162,6 +163,37 @@
         <h2>Cost for five runs, by model</h2>
         <p class="note">AI credits for the same ticket. The end label is the most holes any one of its started runs closed.</p>
         <div class="db-chart" data-draw="l8b-credits-chart" data-source="l8b_by_model"></div>
+      </article>
+
+      <article class="db-card wide" id="l8b-start-card">
+        <h2>Does one line in the prompt fix it?</h2>
+        <p class="note">The same ticket plus one sentence: “Before you finish, build the app jar (ledger-app) and start it to confirm it actually runs.” Six models, five fresh runs each, on 2026-10-31. Each cell is <i>without the line → with it</i>. <i>Ran the app</i> is read from each agent's own transcript.</p>
+        <div class="db-scroll">
+          <table class="db-table" data-source="l8b_start_compare" data-row-key="model">
+            <thead><tr>
+              <th data-field="model">Model</th><th data-field="started">App starts</th><th data-field="ran">Agent ran the app</th>
+              <th data-field="cfg215">Chose config2 2.15.1</th><th data-field="all7">All 7 safe</th><th data-field="credits">Credits (5 runs)</th>
+            </tr></thead>
+            <tbody data-draw="l8b-start-compare"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="db-card wide" id="l8b-start-table-card">
+        <h2>Every run with the extra line</h2>
+        <p class="note">Same probe, same harness. The three Haiku runs on 2.15.1 hit the startup error themselves and changed <code>LedgerSettings</code> to read its file from the classpath stream, so the app starts on the newest version.</p>
+        <div class="db-scroll">
+          <table class="db-table" data-source="lab8bstart" data-row-key="run">
+            <thead><tr>
+              <th data-field="run">Run</th><th data-field="model">Model</th><th data-field="agent_ran_jar">Ran the app</th><th data-field="startup">Starts</th>
+              <th data-field="xxe-dom">XXE DOM</th><th data-field="xxe-stax">XXE StAX ◦</th><th data-field="xxe-sax">XXE SAX ◦</th><th data-field="text4shell">Text4Shell</th>
+              <th data-field="zipslip">Zip Slip</th><th data-field="sqli-search">SQLi search</th><th data-field="sqli-overdrawn">SQLi overdrawn ◦</th>
+              <th data-field="cfg2">config2</th><th data-field="text">text</th><th class="n" data-field="files">Files</th><th data-field="patch">Patch</th>
+              <th class="n" data-field="credits">Credits</th><th class="n" data-field="seconds">Seconds</th>
+            </tr></thead>
+            <tbody data-draw="l8b-start-rows"></tbody>
+          </table>
+        </div>
       </article>
 
       <article class="db-card wide" id="l8b-table-card">
@@ -305,6 +337,27 @@ dash.calc('l8b_cfg', {
   }), (r) => r.cfg2).map(([cfg2, v]) => ({ cfg2, ...v }))
     // 'removed' (the run deleted the library) sorts first, then versions oldest to newest.
     .sort((x, y) => d3.ascending(...[x, y].map((r) => (/^[\d.]+$/.test(r.cfg2) ? r.cfg2.split('.').map(Number).reduce((s, n) => s * 100 + n, 0) : -1)))),
+});
+
+dash.calc('l8b_start_compare', {
+  title: 'Lab 8b with and without the start-the-app line',
+  description: 'For the six models run both ways: app starts, agent ran the app, chose commons-configuration2 2.15.1, all seven holes safe, and credits, each as "without → with" over five runs.',
+  inputs: ['lab8b', 'lab8bstart'],
+  fn: (lab8b, start) => {
+    const stats = (rs) => ({
+      started: rs.filter((r) => r.startup === 'OK').length,
+      ran: rs.filter((r) => r.agent_ran_jar === 'yes').length,
+      cfg215: rs.filter((r) => r.cfg2 === '2.15.1').length,
+      all7: rs.filter((r) => r.startup === 'OK' && PROBES.every((k) => r[k] === 'SAFE')).length,
+      credits: d3.sum(rs, (r) => Number(r.credits) || 0),
+    });
+    const models = [...new Set(start.map((r) => r.model))];
+    const rows = models.map((m) => [m, stats(lab8b.filter((r) => r.model === m && r.run.startsWith('A-'))), stats(start.filter((r) => r.model === m))]);
+    const fmt = (a, b, k) => (k === 'credits' ? `${a[k].toFixed(1)} → ${b[k].toFixed(1)}` : `${a[k]} → ${b[k]}`);
+    const line = (m, a, b) => ({ model: m, ...Object.fromEntries(['started', 'ran', 'cfg215', 'all7', 'credits'].map((k) => [k, fmt(a, b, k)])) });
+    const total = (i) => { const all = rows.map((r) => r[i]); return Object.fromEntries(Object.keys(all[0]).map((k) => [k, d3.sum(all, (x) => x[k])])); };
+    return [...rows.map(([m, a, b]) => line(m, a, b)), line('all six', total(1), total(2))];
+  },
 });
 
 dash.calc('l8b_by_model', {
@@ -569,5 +622,8 @@ dash.draw('l8-version-chart', (el) => {
   table('l8-rows', 'lab8', [['run'], ['model'], ['fix'], ['log4j_core'], ['patch'], ['build'], ['credits', 1], ['seconds', 1], ['recipe_still_changes', 1]]);
   table('l8b-rows', 'lab8b', [['run'], ['model'], ['startup'], ['xxe-dom'], ['xxe-stax'], ['xxe-sax'], ['text4shell'], ['zipslip'], ['sqli-search'],
     ['sqli-overdrawn'], ['cfg2'], ['text'], ['files', 1], ['patch'], ['credits', 1], ['seconds', 1], ['recipe_still_changes', 1]]);
+  table('l8b-start-compare', 'l8b_start_compare', [['model'], ['started'], ['ran'], ['cfg215'], ['all7'], ['credits']]);
+  table('l8b-start-rows', 'lab8bstart', [['run'], ['model'], ['agent_ran_jar'], ['startup'], ['xxe-dom'], ['xxe-stax'], ['xxe-sax'], ['text4shell'], ['zipslip'],
+    ['sqli-search'], ['sqli-overdrawn'], ['cfg2'], ['text'], ['files', 1], ['patch'], ['credits', 1], ['seconds', 1]]);
 })();
 </script>

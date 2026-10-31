@@ -45,6 +45,8 @@ Lab 8 (agent drift vs. a recipe, with an exploitable toy app in 8b) on 2026-10-3
 10. **Lab 8:** the same Log4Shell fix asked of Copilot agents 40 times on 8 models: six different fixes, all green. The
    recipe gives one patch every time. Lab 8b hands agents a scanner ticket for an app with seven real holes and judges
    each fix with live exploits: forty runs, forty patches, and a library upgrade that passes the build but stops the app.
+   One added line, "start the app before you finish", got every agent to run it and ended the outages, but not the
+   holes the ticket didn't name.
 
 ## What's on disk
 
