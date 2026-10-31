@@ -1,0 +1,111 @@
+diff --git a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
+index ddfdfde..9fe8a86 100644
+--- a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
++++ b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
+@@ -31,16 +31,18 @@ public class AccountRepository {
+ 
+     // used by the branch search screen
+     public List<Account> findByOwner(String owner) {
+-        String sql = "select id, owner, balance, restricted from account where restricted = false and owner = '"
+-                + owner + "' order by id";
+-        return jdbc.query(sql, ROW);
++        return jdbc.query(
++                "select id, owner, balance, restricted from account where restricted = false and owner = ? order by id",
++                ROW, owner);
+     }
+ 
+     // used by the overdraft report; copied from findByOwner
+     public List<Account> findOverdrawn(String ownerPrefix) {
+-        String sql = "select id, owner, balance, restricted from account where restricted = false and balance < 0 "
+-                + "and owner like '" + ownerPrefix + "%' order by id";
+-        return jdbc.query(sql, ROW);
++        var escapedPrefix = ownerPrefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
++        return jdbc.query(
++                "select id, owner, balance, restricted from account where restricted = false and balance < 0 "
++                        + "and owner like ? escape '\\\\' order by id",
++                ROW, escapedPrefix + "%");
+     }
+ 
+     public BigDecimal totalBalance() {
+diff --git a/ledger-common/pom.xml b/ledger-common/pom.xml
+index fb6ab4b..386ccee 100644
+--- a/ledger-common/pom.xml
++++ b/ledger-common/pom.xml
+@@ -14,7 +14,7 @@
+         <dependency>
+             <groupId>org.apache.commons</groupId>
+             <artifactId>commons-text</artifactId>
+-            <version>1.9</version>
++            <version>${commons-text.version}</version>
+         </dependency>
+         <dependency>
+             <groupId>org.springframework</groupId>
+diff --git a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+index 8c2b27d..a869b02 100644
+--- a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
++++ b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+@@ -28,13 +28,21 @@ public class ReportArchiveService {
+         var files = new ArrayList<String>();
+         try (var in = new ZipInputStream(new ByteArrayInputStream(zip))) {
+             for (var entry = in.getNextEntry(); entry != null; entry = in.getNextEntry()) {
+-                if (entry.isDirectory()) {
++                if (entry == null || entry.isDirectory()) {
+                     continue;
+                 }
+-                var target = bundleDir.resolve(entry.getName());
++                var entryName = entry.getName();
++                if (entryName == null || entryName.isBlank() || entryName.contains("..") || entryName.startsWith("/")
++                        || entryName.startsWith("\\") || entryName.contains(":\\") || entryName.contains(":")) {
++                    throw new IOException("Invalid archive entry: " + entryName);
++                }
++                var target = bundleDir.resolve(entryName).normalize();
++                if (!target.startsWith(bundleDir.normalize())) {
++                    throw new IOException("Archive entry escapes the bundle directory: " + entryName);
++                }
+                 Files.createDirectories(target.getParent());
+                 Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+-                files.add(entry.getName());
++                files.add(entryName);
+             }
+         }
+         return new UnpackedBundle(bundleDir, List.copyOf(files));
+diff --git a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+index 3c85516..40d5cfa 100644
+--- a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
++++ b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+@@ -8,6 +8,7 @@ import java.util.Collections;
+ import java.util.Comparator;
+ import java.util.List;
+ 
++import javax.xml.XMLConstants;
+ import javax.xml.parsers.DocumentBuilder;
+ import javax.xml.parsers.DocumentBuilderFactory;
+ import javax.xml.parsers.ParserConfigurationException;
+@@ -28,6 +29,13 @@ public class StatementImporter {
+         Document doc;
+         try {
+             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
++            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
++            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
++            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
++            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
++            factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
++            factory.setXIncludeAware(false);
++            factory.setExpandEntityReferences(false);
+             factory.setNamespaceAware(true);
+             DocumentBuilder builder = factory.newDocumentBuilder();
+             doc = builder.parse(new ByteArrayInputStream(xml));
+diff --git a/pom.xml b/pom.xml
+index 6c87c03..ee4da5e 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -27,7 +27,8 @@
+ 
+     <properties>
+         <java.version>17</java.version>
+-        <commons-configuration2.version>2.7</commons-configuration2.version>
++        <commons-configuration2.version>2.15.1</commons-configuration2.version>
++        <commons-text.version>1.15.0</commons-text.version>
+     </properties>
+ 
+     <dependencyManagement>

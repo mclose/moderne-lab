@@ -1,0 +1,22 @@
+# Scratch
+tmp/
+__pycache__/
+target/
+
+# Maven cache shared by the lab containers
+lab/.m2/
+
+# Workspaces: cloned or generated repos, each with its own .git
+lab/*/ws/
+
+# Upstream clones and the recipe project, each its own git repo
+lab/spring-petclinic/
+lab/recipe-starter/
+lab/recipes/
+
+# A/B raw output: model transcripts and logs are large and regenerable.
+# Patches, costs, verify, timing and session summaries stay tracked.
+lab/ab*/results/*.jsonl
+lab/ab*/results/logs/
+lab/ab*/results/*.log
+lab/ab*/results/*.stderr

@@ -1,0 +1,16 @@
+diff --git a/spring-petclinic-customers-service/pom.xml b/spring-petclinic-customers-service/pom.xml
+index 85d5ad1..360f805 100644
+--- a/spring-petclinic-customers-service/pom.xml
++++ b/spring-petclinic-customers-service/pom.xml
+@@ -75,10 +75,10 @@
+             <groupId>org.jolokia</groupId>
+             <artifactId>jolokia-core</artifactId>
+         </dependency>
++        <!-- Version managed by Spring Boot (log4j 2.25.3+). Do not pin 2.14.x — CVE-2021-44228. -->
+         <dependency>
+             <groupId>org.apache.logging.log4j</groupId>
+             <artifactId>log4j-core</artifactId>
+-            <version>2.14.1</version>
+         </dependency>
+         <dependency>
+             <groupId>io.micrometer</groupId>

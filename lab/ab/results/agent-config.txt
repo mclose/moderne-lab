@@ -1,0 +1,1 @@
+copilot 1.0.105; model claude-sonnet-5.5 (plan default); effort medium (default); flags: --allow-all --no-auto-update --disable-builtin-mcps --secret-env-vars=COPILOT_GITHUB_TOKEN --output-format json --share; spend guard: stop if one run > 10 premium requests

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.0.1</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.example.ledger</groupId>
+    <artifactId>ledger-parent</artifactId>
+    <version>1.4.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>Ledger</name>
+    <description>Statements, reports and accounts for the back-office ledger</description>
+
+    <modules>
+        <module>ledger-common</module>
+        <module>ledger-statements</module>
+        <module>ledger-reports</module>
+        <module>ledger-accounts</module>
+        <module>ledger-app</module>
+    </modules>
+
+    <properties>
+        <java.version>17</java.version>
+        <commons-configuration2.version>2.7</commons-configuration2.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.example.ledger</groupId>
+                <artifactId>ledger-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.example.ledger</groupId>
+                <artifactId>ledger-statements</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.example.ledger</groupId>
+                <artifactId>ledger-reports</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.example.ledger</groupId>
+                <artifactId>ledger-accounts</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-configuration2</artifactId>
+                <version>${commons-configuration2.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

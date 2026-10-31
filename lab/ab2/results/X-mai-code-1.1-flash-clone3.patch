@@ -1,0 +1,17 @@
+diff --git a/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java b/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
+index eb23991..862dccf 100644
+--- a/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
++++ b/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
+@@ -14,6 +14,11 @@ lab.LedgerScannerFindings
+ 
+     private final XMLInputFactory factory = XMLInputFactory.newFactory();
+ 
++    {
++        factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
++        factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
++    }
++
+     public ReportMetadata read(InputStream xml) throws XMLStreamException {
+         var reader = factory.createXMLStreamReader(xml);
+         String title = null, branch = null, period = null;
+

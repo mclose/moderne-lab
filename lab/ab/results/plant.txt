@@ -1,0 +1,4 @@
+f11608c Lab 8: plant log4j-core 2.14.1 (CVE-2021-44228) in customers-service
+
+ spring-petclinic-customers-service/pom.xml | 5 +++++
+ 1 file changed, 5 insertions(+)

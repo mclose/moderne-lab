@@ -1,0 +1,149 @@
+diff --git a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java
+index d293f6e..5c0e948 100644
+--- a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java
++++ b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java
+@@ -5,6 +5,7 @@ import java.math.BigDecimal;
+ import java.util.ArrayList;
+ import java.util.List;
+ 
++import javax.xml.XMLConstants;
+ import javax.xml.parsers.SAXParser;
+ import javax.xml.parsers.SAXParserFactory;
+ 
+@@ -18,6 +19,11 @@ public class AccountListImporter {
+ 
+     public List<Account> parse(byte[] xml) throws Exception {
+         SAXParserFactory spf = SAXParserFactory.newInstance();
++        spf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
++        spf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
++        spf.setFeature("http://xml.org/sax/features/external-general-entities", false);
++        spf.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
++        spf.setXIncludeAware(false);
+         SAXParser parser = spf.newSAXParser();
+         List<Account> out = new ArrayList<>();
+         parser.parse(new ByteArrayInputStream(xml), new DefaultHandler() {
+diff --git a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
+index ddfdfde..00a056d 100644
+--- a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
++++ b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
+@@ -31,16 +31,16 @@ public class AccountRepository {
+ 
+     // used by the branch search screen
+     public List<Account> findByOwner(String owner) {
+-        String sql = "select id, owner, balance, restricted from account where restricted = false and owner = '"
+-                + owner + "' order by id";
+-        return jdbc.query(sql, ROW);
++        String sql = "select id, owner, balance, restricted from account where restricted = false and owner = ? order by id";
++        return jdbc.query(sql, ROW, owner);
+     }
+ 
+     // used by the overdraft report; copied from findByOwner
+     public List<Account> findOverdrawn(String ownerPrefix) {
+         String sql = "select id, owner, balance, restricted from account where restricted = false and balance < 0 "
+-                + "and owner like '" + ownerPrefix + "%' order by id";
+-        return jdbc.query(sql, ROW);
++                + "and owner like ? escape '\\' order by id";
++        String escaped = ownerPrefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
++        return jdbc.query(sql, ROW, escaped + "%");
+     }
+ 
+     public BigDecimal totalBalance() {
+diff --git a/ledger-common/pom.xml b/ledger-common/pom.xml
+index fb6ab4b..23641a1 100644
+--- a/ledger-common/pom.xml
++++ b/ledger-common/pom.xml
+@@ -14,7 +14,6 @@
+         <dependency>
+             <groupId>org.apache.commons</groupId>
+             <artifactId>commons-text</artifactId>
+-            <version>1.9</version>
+         </dependency>
+         <dependency>
+             <groupId>org.springframework</groupId>
+diff --git a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+index 8c2b27d..07d629a 100644
+--- a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
++++ b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+@@ -31,7 +31,10 @@ public class ReportArchiveService {
+                 if (entry.isDirectory()) {
+                     continue;
+                 }
+-                var target = bundleDir.resolve(entry.getName());
++                var target = bundleDir.resolve(entry.getName()).normalize();
++                if (!target.startsWith(bundleDir.normalize())) {
++                    throw new IOException("Illegal archive entry path: " + entry.getName());
++                }
+                 Files.createDirectories(target.getParent());
+                 Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                 files.add(entry.getName());
+diff --git a/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java b/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
+index eb23991..85d3f82 100644
+--- a/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
++++ b/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
+@@ -12,7 +12,14 @@ import org.springframework.stereotype.Component;
+ @Component
+ public class ReportMetadataReader {
+ 
+-    private final XMLInputFactory factory = XMLInputFactory.newFactory();
++    private final XMLInputFactory factory = newSecureFactory();
++
++    private static XMLInputFactory newSecureFactory() {
++        XMLInputFactory f = XMLInputFactory.newFactory();
++        f.setProperty(XMLInputFactory.SUPPORT_DTD, false);
++        f.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
++        return f;
++    }
+ 
+     public ReportMetadata read(InputStream xml) throws XMLStreamException {
+         var reader = factory.createXMLStreamReader(xml);
+diff --git a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+index 3c85516..885e767 100644
+--- a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
++++ b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+@@ -8,6 +8,7 @@ import java.util.Collections;
+ import java.util.Comparator;
+ import java.util.List;
+ 
++import javax.xml.XMLConstants;
+ import javax.xml.parsers.DocumentBuilder;
+ import javax.xml.parsers.DocumentBuilderFactory;
+ import javax.xml.parsers.ParserConfigurationException;
+@@ -29,6 +30,12 @@ public class StatementImporter {
+         try {
+             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+             factory.setNamespaceAware(true);
++            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
++            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
++            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
++            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
++            factory.setXIncludeAware(false);
++            factory.setExpandEntityReferences(false);
+             DocumentBuilder builder = factory.newDocumentBuilder();
+             doc = builder.parse(new ByteArrayInputStream(xml));
+         } catch (ParserConfigurationException e) {
+diff --git a/pom.xml b/pom.xml
+index 6c87c03..5358e46 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -27,7 +27,8 @@
+ 
+     <properties>
+         <java.version>17</java.version>
+-        <commons-configuration2.version>2.7</commons-configuration2.version>
++        <commons-configuration2.version>2.11.0</commons-configuration2.version>
++        <commons-text.version>1.13.0</commons-text.version>
+     </properties>
+ 
+     <dependencyManagement>
+@@ -52,6 +53,11 @@
+                 <artifactId>ledger-accounts</artifactId>
+                 <version>${project.version}</version>
+             </dependency>
++            <dependency>
++                <groupId>org.apache.commons</groupId>
++                <artifactId>commons-text</artifactId>
++                <version>${commons-text.version}</version>
++            </dependency>
+             <dependency>
+                 <groupId>org.apache.commons</groupId>
+                 <artifactId>commons-configuration2</artifactId>

@@ -1,0 +1,12 @@
+diff --git a/spring-petclinic-customers-service/pom.xml b/spring-petclinic-customers-service/pom.xml
+index c961366..a3cfc44 100644
+--- a/spring-petclinic-customers-service/pom.xml
++++ b/spring-petclinic-customers-service/pom.xml
+@@ -17,6 +17,7 @@ lab.FixLog4Shell
+     <properties>
+         <docker.image.exposed.port>8081</docker.image.exposed.port>
+         <docker.image.dockerfile.dir>${basedir}/../docker</docker.image.dockerfile.dir>
++        <log4j2.version>2.26.1</log4j2.version>
+     </properties>
+ 
+ 	<dependencies>

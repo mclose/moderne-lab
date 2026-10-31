@@ -1,0 +1,7 @@
+A-kimi-k3-clone1: kimi-k3 ran with its default effort (rejected medium)
+A-kimi-k3-clone2: kimi-k3 ran with its default effort (rejected medium)
+A-kimi-k3-clone3: kimi-k3 ran with its default effort (rejected medium)
+A-kimi-k3-clone4: kimi-k3 ran with its default effort (rejected medium)
+A-kimi-k3-clone5: kimi-k3 ran with its default effort (rejected medium)
+A-start-kimi-k3-clone1: kimi-k3 ran with its default effort (rejected medium)
+A-start-kimi-k3-clone2: kimi-k3 ran with its default effort (rejected medium)

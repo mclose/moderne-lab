@@ -1,0 +1,329 @@
+diff --git a/ledger-accounts/pom.xml b/ledger-accounts/pom.xml
+index f1e61e1..bf5279e 100644
+--- a/ledger-accounts/pom.xml
++++ b/ledger-accounts/pom.xml
+@@ -24,15 +24,6 @@
+             <artifactId>h2</artifactId>
+             <scope>runtime</scope>
+         </dependency>
+-        <dependency>
+-            <groupId>org.apache.commons</groupId>
+-            <artifactId>commons-configuration2</artifactId>
+-        </dependency>
+-        <dependency>
+-            <groupId>commons-beanutils</groupId>
+-            <artifactId>commons-beanutils</artifactId>
+-            <version>1.11.0</version>
+-        </dependency>
+         <dependency>
+             <groupId>org.springframework.boot</groupId>
+             <artifactId>spring-boot-starter-test</artifactId>
+diff --git a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
+index ddfdfde..877601f 100644
+--- a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
++++ b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
+@@ -31,16 +31,15 @@ public class AccountRepository {
+ 
+     // used by the branch search screen
+     public List<Account> findByOwner(String owner) {
+-        String sql = "select id, owner, balance, restricted from account where restricted = false and owner = '"
+-                + owner + "' order by id";
+-        return jdbc.query(sql, ROW);
++        String sql = "select id, owner, balance, restricted from account where restricted = false and owner = ? order by id";
++        return jdbc.query(sql, ROW, owner);
+     }
+ 
+     // used by the overdraft report; copied from findByOwner
+     public List<Account> findOverdrawn(String ownerPrefix) {
+         String sql = "select id, owner, balance, restricted from account where restricted = false and balance < 0 "
+-                + "and owner like '" + ownerPrefix + "%' order by id";
+-        return jdbc.query(sql, ROW);
++                + "and owner like ? order by id";
++        return jdbc.query(sql, ROW, ownerPrefix + "%");
+     }
+ 
+     public BigDecimal totalBalance() {
+diff --git a/ledger-accounts/src/main/java/com/example/ledger/accounts/LedgerSettings.java b/ledger-accounts/src/main/java/com/example/ledger/accounts/LedgerSettings.java
+index bd39727..5a43eaa 100644
+--- a/ledger-accounts/src/main/java/com/example/ledger/accounts/LedgerSettings.java
++++ b/ledger-accounts/src/main/java/com/example/ledger/accounts/LedgerSettings.java
+@@ -1,25 +1,53 @@
+ package com.example.ledger.accounts;
+ 
+-import org.apache.commons.configuration2.PropertiesConfiguration;
+-import org.apache.commons.configuration2.builder.fluent.Configurations;
+-import org.apache.commons.configuration2.ex.ConfigurationException;
++import java.io.IOException;
++import java.io.InputStream;
++import java.util.Properties;
++import java.util.regex.Matcher;
++import java.util.regex.Pattern;
++
+ import org.springframework.stereotype.Component;
+ 
+ /** Branch-level settings shipped as ledger.properties (overdraft limits, display names). */
+ @Component
+ public class LedgerSettings {
+ 
+-    private final PropertiesConfiguration config;
++    private static final Pattern VARIABLE = Pattern.compile("\\$\\{([^}:]+)(?::([^}]*))?\\}");
++
++    private final Properties config;
+ 
+-    public LedgerSettings() throws ConfigurationException {
+-        this.config = new Configurations().properties(LedgerSettings.class.getResource("/ledger.properties"));
++    public LedgerSettings() throws IOException {
++        this.config = new Properties();
++        var resource = LedgerSettings.class.getResource("/ledger.properties");
++        if (resource != null) {
++            try (InputStream in = resource.openStream()) {
++                config.load(in);
++            }
++        }
+     }
+ 
+     public String branchName() {
+-        return config.getString("ledger.branch.name", "Head office");
++        return resolve(config.getProperty("ledger.branch.name", "Head office"));
+     }
+ 
+     public int searchLimit() {
+-        return config.getInt("ledger.search.limit", 50);
++        return Integer.parseInt(resolve(config.getProperty("ledger.search.limit", "50")));
++    }
++
++    private String resolve(String value) {
++        Matcher matcher = VARIABLE.matcher(value);
++        StringBuffer out = new StringBuffer();
++        while (matcher.find()) {
++            String key = matcher.group(1);
++            String arg = matcher.group(2);
++            String replacement = switch (key) {
++                case "sys" -> arg == null ? null : System.getProperty(arg);
++                case "env" -> arg == null ? null : System.getenv(arg);
++                default -> null;
++            };
++            matcher.appendReplacement(out, Matcher.quoteReplacement(replacement == null ? "" : replacement));
++        }
++        matcher.appendTail(out);
++        return out.toString();
+     }
+ }
+diff --git a/ledger-common/pom.xml b/ledger-common/pom.xml
+index fb6ab4b..f560e7f 100644
+--- a/ledger-common/pom.xml
++++ b/ledger-common/pom.xml
+@@ -11,11 +11,6 @@
+     <name>Ledger Common</name>
+ 
+     <dependencies>
+-        <dependency>
+-            <groupId>org.apache.commons</groupId>
+-            <artifactId>commons-text</artifactId>
+-            <version>1.9</version>
+-        </dependency>
+         <dependency>
+             <groupId>org.springframework</groupId>
+             <artifactId>spring-context</artifactId>
+diff --git a/ledger-common/src/main/java/com/example/ledger/common/FallbackLookup.java b/ledger-common/src/main/java/com/example/ledger/common/FallbackLookup.java
+index e33f10c..ac624fa 100644
+--- a/ledger-common/src/main/java/com/example/ledger/common/FallbackLookup.java
++++ b/ledger-common/src/main/java/com/example/ledger/common/FallbackLookup.java
+@@ -1,23 +1,36 @@
+ package com.example.ledger.common;
+ 
++import java.time.LocalDate;
++import java.time.format.DateTimeFormatter;
+ import java.util.Map;
+ 
+-import org.apache.commons.text.lookup.StringLookup;
+-
+ /** Template values first; anything else (date:, env: ...) goes to the standard lookups. */
+-class FallbackLookup implements StringLookup {
++class FallbackLookup {
+ 
+     private final Map<String, String> values;
+-    private final StringLookup standard;
+ 
+-    FallbackLookup(Map<String, String> values, StringLookup standard) {
++    FallbackLookup(Map<String, String> values) {
+         this.values = values;
+-        this.standard = standard;
+     }
+ 
+-    @Override
+-    public String lookup(String key) {
++    String lookup(String key) {
+         String value = values.get(key);
+-        return value != null ? value : standard.lookup(key);
++        if (value != null) {
++            return value;
++        }
++        if (key.startsWith("date:")) {
++            String pattern = key.substring("date:".length());
++            if (pattern.isBlank()) {
++                pattern = "yyyy-MM-dd";
++            }
++            return LocalDate.now().format(DateTimeFormatter.ofPattern(pattern));
++        }
++        if (key.startsWith("env:")) {
++            return System.getenv(key.substring("env:".length()));
++        }
++        if (key.startsWith("sys:")) {
++            return System.getProperty(key.substring("sys:".length()));
++        }
++        return null;
+     }
+ }
+diff --git a/ledger-common/src/main/java/com/example/ledger/common/NoticeRenderer.java b/ledger-common/src/main/java/com/example/ledger/common/NoticeRenderer.java
+index cb52ecd..7842372 100644
+--- a/ledger-common/src/main/java/com/example/ledger/common/NoticeRenderer.java
++++ b/ledger-common/src/main/java/com/example/ledger/common/NoticeRenderer.java
+@@ -1,8 +1,11 @@
+ package com.example.ledger.common;
+ 
++import java.time.LocalDate;
++import java.time.format.DateTimeFormatter;
+ import java.util.Map;
++import java.util.regex.Matcher;
++import java.util.regex.Pattern;
+ 
+-import org.apache.commons.text.StringSubstitutor;
+ import org.springframework.stereotype.Component;
+ 
+ /**
+@@ -12,9 +15,35 @@ import org.springframework.stereotype.Component;
+ @Component
+ public class NoticeRenderer {
+ 
++    private static final Pattern VARIABLE = Pattern.compile("\\$\\{([^}:]+)(?::([^}]*))?\\}");
++
+     public String render(String template, Map<String, String> values) {
+-        StringSubstitutor substitutor = StringSubstitutor.createInterpolator();
+-        substitutor.setVariableResolver(new FallbackLookup(values, substitutor.getStringLookup()));
+-        return substitutor.replace(template);
++        Matcher matcher = VARIABLE.matcher(template);
++        StringBuffer out = new StringBuffer();
++        while (matcher.find()) {
++            String key = matcher.group(1);
++            String arg = matcher.group(2);
++            String replacement = lookup(values, key, arg);
++            matcher.appendReplacement(out, Matcher.quoteReplacement(replacement == null ? "" : replacement));
++        }
++        matcher.appendTail(out);
++        return out.toString();
++    }
++
++    private static String lookup(Map<String, String> values, String key, String arg) {
++        if (values.containsKey(key)) {
++            return values.get(key);
++        }
++        if ("date".equals(key)) {
++            String pattern = (arg == null || arg.isBlank()) ? "yyyy-MM-dd" : arg;
++            return LocalDate.now().format(DateTimeFormatter.ofPattern(pattern));
++        }
++        if ("env".equals(key) && arg != null) {
++            return System.getenv(arg);
++        }
++        if ("sys".equals(key) && arg != null) {
++            return System.getProperty(arg);
++        }
++        return null;
+     }
+ }
+diff --git a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+index 8c2b27d..6796aa5 100644
+--- a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
++++ b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+@@ -20,7 +20,7 @@ public class ReportArchiveService {
+     private final Path root;
+ 
+     public ReportArchiveService(@Value("${ledger.reports.dir:${java.io.tmpdir}/ledger-reports}") Path root) {
+-        this.root = root;
++        this.root = root.toAbsolutePath().normalize();
+     }
+ 
+     public UnpackedBundle unpack(byte[] zip) throws IOException {
+@@ -31,15 +31,28 @@ public class ReportArchiveService {
+                 if (entry.isDirectory()) {
+                     continue;
+                 }
+-                var target = bundleDir.resolve(entry.getName());
++                String name = entry.getName();
++                var target = safeTarget(bundleDir, name);
+                 Files.createDirectories(target.getParent());
+                 Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+-                files.add(entry.getName());
++                files.add(name);
+             }
+         }
+         return new UnpackedBundle(bundleDir, List.copyOf(files));
+     }
+ 
++    private Path safeTarget(Path root, String entryName) throws IOException {
++        String normalized = entryName.replace('\\', '/');
++        if (normalized.isBlank() || normalized.startsWith("/") || normalized.contains("..")) {
++            throw new IOException("Archive entry is invalid: " + entryName);
++        }
++        var target = root.resolve(normalized).normalize();
++        if (!target.startsWith(root.normalize())) {
++            throw new IOException("Archive entry escapes the destination directory: " + entryName);
++        }
++        return target;
++    }
++
+     public record UnpackedBundle(Path dir, List<String> files) {
+     }
+ }
+diff --git a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+index 3c85516..391f678 100644
+--- a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
++++ b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+@@ -8,6 +8,7 @@ import java.util.Collections;
+ import java.util.Comparator;
+ import java.util.List;
+ 
++import javax.xml.XMLConstants;
+ import javax.xml.parsers.DocumentBuilder;
+ import javax.xml.parsers.DocumentBuilderFactory;
+ import javax.xml.parsers.ParserConfigurationException;
+@@ -29,6 +30,15 @@ public class StatementImporter {
+         try {
+             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+             factory.setNamespaceAware(true);
++            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
++            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
++            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
++            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
++            factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
++            factory.setXIncludeAware(false);
++            factory.setExpandEntityReferences(false);
++            factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
++            factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+             DocumentBuilder builder = factory.newDocumentBuilder();
+             doc = builder.parse(new ByteArrayInputStream(xml));
+         } catch (ParserConfigurationException e) {
+diff --git a/pom.xml b/pom.xml
+index 6c87c03..ddb3c2e 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -27,7 +27,6 @@
+ 
+     <properties>
+         <java.version>17</java.version>
+-        <commons-configuration2.version>2.7</commons-configuration2.version>
+     </properties>
+ 
+     <dependencyManagement>
+@@ -52,11 +51,6 @@
+                 <artifactId>ledger-accounts</artifactId>
+                 <version>${project.version}</version>
+             </dependency>
+-            <dependency>
+-                <groupId>org.apache.commons</groupId>
+-                <artifactId>commons-configuration2</artifactId>
+-                <version>${commons-configuration2.version}</version>
+-            </dependency>
+         </dependencies>
+     </dependencyManagement>
+ </project>

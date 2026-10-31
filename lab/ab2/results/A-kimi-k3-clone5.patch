@@ -1,0 +1,97 @@
+diff --git a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
+index ddfdfde..d0b2485 100644
+--- a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
++++ b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
+@@ -31,16 +31,14 @@ public class AccountRepository {
+ 
+     // used by the branch search screen
+     public List<Account> findByOwner(String owner) {
+-        String sql = "select id, owner, balance, restricted from account where restricted = false and owner = '"
+-                + owner + "' order by id";
+-        return jdbc.query(sql, ROW);
++        return jdbc.query("select id, owner, balance, restricted from account where restricted = false and owner = ? order by id",
++                ROW, owner);
+     }
+ 
+     // used by the overdraft report; copied from findByOwner
+     public List<Account> findOverdrawn(String ownerPrefix) {
+-        String sql = "select id, owner, balance, restricted from account where restricted = false and balance < 0 "
+-                + "and owner like '" + ownerPrefix + "%' order by id";
+-        return jdbc.query(sql, ROW);
++        return jdbc.query("select id, owner, balance, restricted from account where restricted = false and balance < 0 "
++                + "and owner like ? order by id", ROW, ownerPrefix + "%");
+     }
+ 
+     public BigDecimal totalBalance() {
+diff --git a/ledger-common/pom.xml b/ledger-common/pom.xml
+index fb6ab4b..536a642 100644
+--- a/ledger-common/pom.xml
++++ b/ledger-common/pom.xml
+@@ -14,7 +14,7 @@
+         <dependency>
+             <groupId>org.apache.commons</groupId>
+             <artifactId>commons-text</artifactId>
+-            <version>1.9</version>
++            <version>1.10.0</version>
+         </dependency>
+         <dependency>
+             <groupId>org.springframework</groupId>
+diff --git a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+index 8c2b27d..778aa39 100644
+--- a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
++++ b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+@@ -31,7 +31,10 @@ public class ReportArchiveService {
+                 if (entry.isDirectory()) {
+                     continue;
+                 }
+-                var target = bundleDir.resolve(entry.getName());
++                var target = bundleDir.resolve(entry.getName()).normalize();
++                if (!target.startsWith(bundleDir)) {
++                    throw new IOException("zip entry escapes target directory: " + entry.getName());
++                }
+                 Files.createDirectories(target.getParent());
+                 Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                 files.add(entry.getName());
+diff --git a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+index 3c85516..afa637f 100644
+--- a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
++++ b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+@@ -29,6 +29,12 @@ public class StatementImporter {
+         try {
+             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+             factory.setNamespaceAware(true);
++            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
++            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
++            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
++            factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
++            factory.setXIncludeAware(false);
++            factory.setExpandEntityReferences(false);
+             DocumentBuilder builder = factory.newDocumentBuilder();
+             doc = builder.parse(new ByteArrayInputStream(xml));
+         } catch (ParserConfigurationException e) {
+diff --git a/pom.xml b/pom.xml
+index 6c87c03..6fab80c 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -27,7 +27,8 @@
+ 
+     <properties>
+         <java.version>17</java.version>
+-        <commons-configuration2.version>2.7</commons-configuration2.version>
++        <commons-configuration2.version>2.8.0</commons-configuration2.version>
++        <commons-text.version>1.10.0</commons-text.version>
+     </properties>
+ 
+     <dependencyManagement>
+@@ -57,6 +58,11 @@
+                 <artifactId>commons-configuration2</artifactId>
+                 <version>${commons-configuration2.version}</version>
+             </dependency>
++            <dependency>
++                <groupId>org.apache.commons</groupId>
++                <artifactId>commons-text</artifactId>
++                <version>${commons-text.version}</version>
++            </dependency>
+         </dependencies>
+     </dependencyManagement>
+ </project>

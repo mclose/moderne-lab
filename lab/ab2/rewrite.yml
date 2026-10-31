@@ -1,0 +1,22 @@
+# Lab 8b Side B: one recipe for the whole scanner report. Library versions = latest on Maven Central,
+# checked 2026-10-30: commons-text 1.15.0, commons-configuration2 2.15.1.
+type: specs.openrewrite.org/v1beta/recipe
+name: lab.LedgerScannerFindings
+displayName: Fix the ledger scanner findings
+description: Dependency upgrades for Text4Shell and commons-configuration2, plus the code-level XXE, Zip Slip and SQL injection fixes from rewrite-java-security.
+recipeList:
+  - org.openrewrite.java.dependencies.UpgradeDependencyVersion:
+      groupId: org.apache.commons
+      artifactId: commons-text
+      newVersion: 1.15.0
+  - org.openrewrite.java.dependencies.UpgradeTransitiveDependencyVersion:
+      groupId: org.apache.commons
+      artifactId: commons-text
+      version: 1.15.0
+  - org.openrewrite.java.dependencies.UpgradeDependencyVersion:
+      groupId: org.apache.commons
+      artifactId: commons-configuration2
+      newVersion: 2.15.1
+  - org.openrewrite.java.security.XmlParserXXEVulnerability
+  - org.openrewrite.java.security.ZipSlip
+  - org.openrewrite.java.security.FixSqlInjectionConcat

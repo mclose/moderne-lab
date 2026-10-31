@@ -1,0 +1,139 @@
+diff --git a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
+index ddfdfde..d69c616 100644
+--- a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
++++ b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
+@@ -31,16 +31,17 @@ public class AccountRepository {
+ 
+     // used by the branch search screen
+     public List<Account> findByOwner(String owner) {
+-        String sql = "select id, owner, balance, restricted from account where restricted = false and owner = '"
+-                + owner + "' order by id";
+-        return jdbc.query(sql, ROW);
++        return jdbc.query(
++                "select id, owner, balance, restricted from account where restricted = false and owner = ? order by id",
++                ROW, owner);
+     }
+ 
+     // used by the overdraft report; copied from findByOwner
+     public List<Account> findOverdrawn(String ownerPrefix) {
+-        String sql = "select id, owner, balance, restricted from account where restricted = false and balance < 0 "
+-                + "and owner like '" + ownerPrefix + "%' order by id";
+-        return jdbc.query(sql, ROW);
++        return jdbc.query(
++                "select id, owner, balance, restricted from account where restricted = false and balance < 0 "
++                        + "and owner like ? order by id",
++                ROW, ownerPrefix + "%");
+     }
+ 
+     public BigDecimal totalBalance() {
+diff --git a/ledger-common/pom.xml b/ledger-common/pom.xml
+index fb6ab4b..386ccee 100644
+--- a/ledger-common/pom.xml
++++ b/ledger-common/pom.xml
+@@ -14,7 +14,7 @@
+         <dependency>
+             <groupId>org.apache.commons</groupId>
+             <artifactId>commons-text</artifactId>
+-            <version>1.9</version>
++            <version>${commons-text.version}</version>
+         </dependency>
+         <dependency>
+             <groupId>org.springframework</groupId>
+diff --git a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+index 8c2b27d..5953cbd 100644
+--- a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
++++ b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+@@ -31,7 +31,7 @@ public class ReportArchiveService {
+                 if (entry.isDirectory()) {
+                     continue;
+                 }
+-                var target = bundleDir.resolve(entry.getName());
++                var target = safeEntryPath(bundleDir, entry.getName());
+                 Files.createDirectories(target.getParent());
+                 Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                 files.add(entry.getName());
+@@ -40,6 +40,25 @@ public class ReportArchiveService {
+         return new UnpackedBundle(bundleDir, List.copyOf(files));
+     }
+ 
++    /** Rejects absolute paths and ".." segments so a zip entry cannot escape the bundle directory. */
++    private static Path safeEntryPath(Path bundleDir, String entryName) throws IOException {
++        var root = bundleDir.toAbsolutePath().normalize();
++        var relative = Path.of(entryName);
++        if (relative.isAbsolute()) {
++            throw new IOException("zip entry is outside the bundle directory: " + entryName);
++        }
++        for (var part : relative) {
++            if ("..".equals(part.toString())) {
++                throw new IOException("zip entry is outside the bundle directory: " + entryName);
++            }
++        }
++        var target = root.resolve(relative).normalize();
++        if (!target.startsWith(root) || target.equals(root)) {
++            throw new IOException("zip entry is outside the bundle directory: " + entryName);
++        }
++        return target;
++    }
++
+     public record UnpackedBundle(Path dir, List<String> files) {
+     }
+ }
+diff --git a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+index 3c85516..29120a6 100644
+--- a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
++++ b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+@@ -8,6 +8,7 @@ import java.util.Collections;
+ import java.util.Comparator;
+ import java.util.List;
+ 
++import javax.xml.XMLConstants;
+ import javax.xml.parsers.DocumentBuilder;
+ import javax.xml.parsers.DocumentBuilderFactory;
+ import javax.xml.parsers.ParserConfigurationException;
+@@ -29,6 +30,16 @@ public class StatementImporter {
+         try {
+             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+             factory.setNamespaceAware(true);
++            // Reject DTDs and external entities so statement XML cannot trigger XXE.
++            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
++            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
++            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
++            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
++            factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
++            factory.setXIncludeAware(false);
++            factory.setExpandEntityReferences(false);
++            factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
++            factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+             DocumentBuilder builder = factory.newDocumentBuilder();
+             doc = builder.parse(new ByteArrayInputStream(xml));
+         } catch (ParserConfigurationException e) {
+diff --git a/pom.xml b/pom.xml
+index 6c87c03..92d9511 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -27,7 +27,12 @@
+ 
+     <properties>
+         <java.version>17</java.version>
+-        <commons-configuration2.version>2.7</commons-configuration2.version>
++        <!-- 3.20.0 matches commons-configuration2 2.15.1 / commons-text 1.15.0 -->
++        <commons-lang3.version>3.20.0</commons-lang3.version>
++        <!-- CVE-2022-42889 (Text4Shell) fixed in 1.10.0 -->
++        <commons-text.version>1.15.0</commons-text.version>
++        <!-- CVE-2022-33980 fixed in 2.8.0; 2.15.1 also drops the vulnerable commons-text 1.8 transitive -->
++        <commons-configuration2.version>2.15.1</commons-configuration2.version>
+     </properties>
+ 
+     <dependencyManagement>
+@@ -52,6 +57,11 @@
+                 <artifactId>ledger-accounts</artifactId>
+                 <version>${project.version}</version>
+             </dependency>
++            <dependency>
++                <groupId>org.apache.commons</groupId>
++                <artifactId>commons-text</artifactId>
++                <version>${commons-text.version}</version>
++            </dependency>
+             <dependency>
+                 <groupId>org.apache.commons</groupId>
+                 <artifactId>commons-configuration2</artifactId>

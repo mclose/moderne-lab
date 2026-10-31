@@ -1,0 +1,11 @@
+# Lab 8 Side B: the one recipe. newVersion = latest 2.x on Maven Central when the lab was run
+# (2.26.1, checked 2026-10-30; maven-metadata's <latest> is 3.0.0-beta3, which we skip on purpose).
+type: specs.openrewrite.org/v1beta/recipe
+name: lab.FixLog4Shell
+displayName: Upgrade log4j-core past Log4Shell
+description: Upgrade org.apache.logging.log4j:log4j-core to 2.26.1 wherever it is declared or managed.
+recipeList:
+  - org.openrewrite.java.dependencies.UpgradeDependencyVersion:
+      groupId: org.apache.logging.log4j
+      artifactId: log4j-core
+      newVersion: 2.26.1

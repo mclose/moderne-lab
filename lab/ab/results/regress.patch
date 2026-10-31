@@ -1,0 +1,13 @@
+diff --git a/spring-petclinic-vets-service/pom.xml b/spring-petclinic-vets-service/pom.xml
+index 1d5c783..2b7d198 100644
+--- a/spring-petclinic-vets-service/pom.xml
++++ b/spring-petclinic-vets-service/pom.xml
+@@ -23,7 +23,7 @@ lab.FixLog4Shell
+         <dependency>
+             <groupId>org.apache.logging.log4j</groupId>
+             <artifactId>log4j-core</artifactId>
+-            <version>2.14.1</version>
++            <version>2.26.1</version>
+         </dependency>
+         <!-- Spring Boot -->
+ 		<dependency>

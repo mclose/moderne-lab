@@ -1,0 +1,108 @@
+diff --git a/pom.xml b/pom.xml
+index e0f93fd..1dc617f 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -27,7 +27,7 @@ lab.LedgerScannerFindings
+ 
+     <properties>
+         <java.version>17</java.version>
+-        <commons-configuration2.version>2.11.0</commons-configuration2.version>
++        <commons-configuration2.version>2.15.1</commons-configuration2.version>
+     </properties>
+ 
+     <dependencyManagement>
+
+diff --git a/ledger-common/pom.xml b/ledger-common/pom.xml
+index 7cfd85e..69f0b58 100644
+--- a/ledger-common/pom.xml
++++ b/ledger-common/pom.xml
+@@ -14,7 +14,7 @@ lab.LedgerScannerFindings
+         <dependency>
+             <groupId>org.apache.commons</groupId>
+             <artifactId>commons-text</artifactId>
+-            <version>1.11.0</version>
++            <version>1.15.0</version>
+         </dependency>
+         <dependency>
+             <groupId>org.springframework</groupId>
+
+diff --git a/ledger-statements/pom.xml b/ledger-statements/pom.xml
+index b1cafd9..a56bcb5 100644
+--- a/ledger-statements/pom.xml
++++ b/ledger-statements/pom.xml
+@@ -9,6 +9,15 @@ lab.LedgerScannerFindings
+     </parent>
+     <artifactId>ledger-statements</artifactId>
+     <name>Ledger Statements</name>
++    <dependencyManagement>
++        <dependencies>
++            <dependency>
++                <groupId>org.apache.commons</groupId>
++                <artifactId>commons-text</artifactId>
++                <version>1.15.0</version>
++            </dependency>
++        </dependencies>
++    </dependencyManagement>
+ 
+     <dependencies>
+         <dependency>
+
+diff --git a/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java b/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
+index eb23991..862dccf 100644
+--- a/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
++++ b/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
+@@ -14,6 +14,11 @@ lab.LedgerScannerFindings
+ 
+     private final XMLInputFactory factory = XMLInputFactory.newFactory();
+ 
++    {
++        factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
++        factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
++    }
++
+     public ReportMetadata read(InputStream xml) throws XMLStreamException {
+         var reader = factory.createXMLStreamReader(xml);
+         String title = null, branch = null, period = null;
+
+diff --git a/ledger-accounts/pom.xml b/ledger-accounts/pom.xml
+index f1e61e1..367a1f5 100644
+--- a/ledger-accounts/pom.xml
++++ b/ledger-accounts/pom.xml
+@@ -9,6 +9,15 @@ lab.LedgerScannerFindings
+     </parent>
+     <artifactId>ledger-accounts</artifactId>
+     <name>Ledger Accounts</name>
++    <dependencyManagement>
++        <dependencies>
++            <dependency>
++                <groupId>org.apache.commons</groupId>
++                <artifactId>commons-text</artifactId>
++                <version>1.15.0</version>
++            </dependency>
++        </dependencies>
++    </dependencyManagement>
+ 
+     <dependencies>
+         <dependency>
+
+diff --git a/ledger-app/pom.xml b/ledger-app/pom.xml
+index d031e48..c6b4226 100644
+--- a/ledger-app/pom.xml
++++ b/ledger-app/pom.xml
+@@ -9,6 +9,15 @@ lab.LedgerScannerFindings
+     </parent>
+     <artifactId>ledger-app</artifactId>
+     <name>Ledger App</name>
++    <dependencyManagement>
++        <dependencies>
++            <dependency>
++                <groupId>org.apache.commons</groupId>
++                <artifactId>commons-text</artifactId>
++                <version>1.15.0</version>
++            </dependency>
++        </dependencies>
++    </dependencyManagement>
+ 
+     <dependencies>
+         <dependency>
+
