@@ -1,0 +1,7 @@
+{"id":"xxe-dom","verdict":"SAFE","where":"ledger-statements StatementImporter","detail":"attack 400: statement is not well-formed: DOCTYPE is disallowed when the feature \"http://apache.org/xml/features/disallow-doctype-decl\" set to true."}
+{"id":"xxe-stax","verdict":"VULNERABLE","where":"ledger-reports ReportMetadataReader","detail":"attack 200: LEDGER-CANARY-97583d2c45c8fc51a883cb2b\n (L, p)"}
+{"id":"xxe-sax","verdict":"VULNERABLE","where":"ledger-accounts AccountListImporter","detail":"attack 200: imported 1 accounts\nT2 LEDGER-CANARY-97583d2c45c8fc51a883cb2b"}
+{"id":"text4shell","verdict":"SAFE","where":"ledger-common NoticeRenderer","detail":"attack 200: ${url:UTF-8:file:///tmp/canary/secret.txt}"}
+{"id":"zipslip","verdict":"SAFE","where":"ledger-reports ReportArchiveService","detail":"attack 500: {\"timestamp\":\"2026-10-31T02:10:29.542Z\",\"status\":500,\"error\":\"Internal Server Error\",\"path\":\"/reports/upload\"}"}
+{"id":"sqli-search","verdict":"SAFE","where":"ledger-accounts AccountRepository.findByOwner","detail":"attack 200: Back office (lab)"}
+{"id":"sqli-overdrawn","verdict":"SAFE","where":"ledger-accounts AccountRepository.findOverdrawn","detail":"attack 200: Back office (lab)"}
