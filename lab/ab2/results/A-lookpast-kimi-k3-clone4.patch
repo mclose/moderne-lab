@@ -1,0 +1,258 @@
+diff --git a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java
+index d293f6e..c6afcc6 100644
+--- a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java
++++ b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java
+@@ -5,6 +5,7 @@ import java.math.BigDecimal;
+ import java.util.ArrayList;
+ import java.util.List;
+ 
++import javax.xml.XMLConstants;
+ import javax.xml.parsers.SAXParser;
+ import javax.xml.parsers.SAXParserFactory;
+ 
+@@ -18,6 +19,12 @@ public class AccountListImporter {
+ 
+     public List<Account> parse(byte[] xml) throws Exception {
+         SAXParserFactory spf = SAXParserFactory.newInstance();
++        // CWE-611: reject DTDs and external entities so imports cannot read local files or call out
++        spf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
++        spf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
++        spf.setFeature("http://xml.org/sax/features/external-general-entities", false);
++        spf.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
++        spf.setXIncludeAware(false);
+         SAXParser parser = spf.newSAXParser();
+         List<Account> out = new ArrayList<>();
+         parser.parse(new ByteArrayInputStream(xml), new DefaultHandler() {
+diff --git a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
+index ddfdfde..dd6b093 100644
+--- a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
++++ b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
+@@ -31,16 +31,17 @@ public class AccountRepository {
+ 
+     // used by the branch search screen
+     public List<Account> findByOwner(String owner) {
+-        String sql = "select id, owner, balance, restricted from account where restricted = false and owner = '"
+-                + owner + "' order by id";
+-        return jdbc.query(sql, ROW);
++        String sql = "select id, owner, balance, restricted from account where restricted = false and owner = ?"
++                + " order by id";
++        return jdbc.query(sql, ROW, owner);
+     }
+ 
+     // used by the overdraft report; copied from findByOwner
+     public List<Account> findOverdrawn(String ownerPrefix) {
+         String sql = "select id, owner, balance, restricted from account where restricted = false and balance < 0 "
+-                + "and owner like '" + ownerPrefix + "%' order by id";
+-        return jdbc.query(sql, ROW);
++                + "and owner like ? escape '\\' order by id";
++        String pattern = ownerPrefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
++        return jdbc.query(sql, ROW, pattern);
+     }
+ 
+     public BigDecimal totalBalance() {
+diff --git a/ledger-accounts/src/main/java/com/example/ledger/accounts/LedgerSettings.java b/ledger-accounts/src/main/java/com/example/ledger/accounts/LedgerSettings.java
+index bd39727..c1d19ca 100644
+--- a/ledger-accounts/src/main/java/com/example/ledger/accounts/LedgerSettings.java
++++ b/ledger-accounts/src/main/java/com/example/ledger/accounts/LedgerSettings.java
+@@ -1,8 +1,11 @@
+ package com.example.ledger.accounts;
+ 
++import java.io.IOException;
++import java.io.InputStream;
++
+ import org.apache.commons.configuration2.PropertiesConfiguration;
+-import org.apache.commons.configuration2.builder.fluent.Configurations;
+ import org.apache.commons.configuration2.ex.ConfigurationException;
++import org.apache.commons.configuration2.io.FileHandler;
+ import org.springframework.stereotype.Component;
+ 
+ /** Branch-level settings shipped as ledger.properties (overdraft limits, display names). */
+@@ -11,8 +14,14 @@ public class LedgerSettings {
+ 
+     private final PropertiesConfiguration config;
+ 
+-    public LedgerSettings() throws ConfigurationException {
+-        this.config = new Configurations().properties(LedgerSettings.class.getResource("/ledger.properties"));
++    public LedgerSettings() throws ConfigurationException, IOException {
++        this.config = new PropertiesConfiguration();
++        try (InputStream in = LedgerSettings.class.getResourceAsStream("/ledger.properties")) {
++            if (in == null) {
++                throw new IllegalStateException("ledger.properties is not on the classpath");
++            }
++            new FileHandler(config).load(in);
++        }
+     }
+ 
+     public String branchName() {
+diff --git a/ledger-common/pom.xml b/ledger-common/pom.xml
+index fb6ab4b..23641a1 100644
+--- a/ledger-common/pom.xml
++++ b/ledger-common/pom.xml
+@@ -14,7 +14,6 @@
+         <dependency>
+             <groupId>org.apache.commons</groupId>
+             <artifactId>commons-text</artifactId>
+-            <version>1.9</version>
+         </dependency>
+         <dependency>
+             <groupId>org.springframework</groupId>
+diff --git a/ledger-common/src/main/java/com/example/ledger/common/FallbackLookup.java b/ledger-common/src/main/java/com/example/ledger/common/FallbackLookup.java
+deleted file mode 100644
+index e33f10c..0000000
+--- a/ledger-common/src/main/java/com/example/ledger/common/FallbackLookup.java
++++ /dev/null
+@@ -1,23 +0,0 @@
+-package com.example.ledger.common;
+-
+-import java.util.Map;
+-
+-import org.apache.commons.text.lookup.StringLookup;
+-
+-/** Template values first; anything else (date:, env: ...) goes to the standard lookups. */
+-class FallbackLookup implements StringLookup {
+-
+-    private final Map<String, String> values;
+-    private final StringLookup standard;
+-
+-    FallbackLookup(Map<String, String> values, StringLookup standard) {
+-        this.values = values;
+-        this.standard = standard;
+-    }
+-
+-    @Override
+-    public String lookup(String key) {
+-        String value = values.get(key);
+-        return value != null ? value : standard.lookup(key);
+-    }
+-}
+diff --git a/ledger-common/src/main/java/com/example/ledger/common/NoticeRenderer.java b/ledger-common/src/main/java/com/example/ledger/common/NoticeRenderer.java
+index cb52ecd..6cd817d 100644
+--- a/ledger-common/src/main/java/com/example/ledger/common/NoticeRenderer.java
++++ b/ledger-common/src/main/java/com/example/ledger/common/NoticeRenderer.java
+@@ -3,18 +3,25 @@ package com.example.ledger.common;
+ import java.util.Map;
+ 
+ import org.apache.commons.text.StringSubstitutor;
++import org.apache.commons.text.lookup.StringLookupFactory;
+ import org.springframework.stereotype.Component;
+ 
+ /**
+  * Renders customer notices from templates kept by operations, e.g.
+  * "Dear ${name}, your balance on ${date:yyyy-MM-dd} is ${balance}."
++ *
++ * Only the supplied values and date formatting are available; the default
++ * interpolator lookups (script, url, dns, env, ...) must not be reachable
++ * from template text.
+  */
+ @Component
+ public class NoticeRenderer {
+ 
+     public String render(String template, Map<String, String> values) {
+-        StringSubstitutor substitutor = StringSubstitutor.createInterpolator();
+-        substitutor.setVariableResolver(new FallbackLookup(values, substitutor.getStringLookup()));
+-        return substitutor.replace(template);
++        var lookup = StringLookupFactory.INSTANCE.interpolatorStringLookup(
++                Map.of("date", StringLookupFactory.INSTANCE.dateStringLookup()),
++                StringLookupFactory.INSTANCE.mapStringLookup(values),
++                false);
++        return new StringSubstitutor(lookup).replace(template);
+     }
+ }
+diff --git a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+index 8c2b27d..9b3b316 100644
+--- a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
++++ b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+@@ -24,14 +24,19 @@ public class ReportArchiveService {
+     }
+ 
+     public UnpackedBundle unpack(byte[] zip) throws IOException {
+-        var bundleDir = Files.createDirectories(root.resolve(UUID.randomUUID().toString()));
++        var bundleDir = Files.createDirectories(root.resolve(UUID.randomUUID().toString()))
++                .toAbsolutePath().normalize();
+         var files = new ArrayList<String>();
+         try (var in = new ZipInputStream(new ByteArrayInputStream(zip))) {
+             for (var entry = in.getNextEntry(); entry != null; entry = in.getNextEntry()) {
+                 if (entry.isDirectory()) {
+                     continue;
+                 }
+-                var target = bundleDir.resolve(entry.getName());
++                // CWE-22: reject entries that would escape the bundle directory (Zip Slip)
++                var target = bundleDir.resolve(entry.getName()).normalize();
++                if (!target.startsWith(bundleDir)) {
++                    throw new IOException("zip entry escapes target directory: " + entry.getName());
++                }
+                 Files.createDirectories(target.getParent());
+                 Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                 files.add(entry.getName());
+diff --git a/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java b/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
+index eb23991..3745b27 100644
+--- a/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
++++ b/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
+@@ -12,7 +12,15 @@ import org.springframework.stereotype.Component;
+ @Component
+ public class ReportMetadataReader {
+ 
+-    private final XMLInputFactory factory = XMLInputFactory.newFactory();
++    private final XMLInputFactory factory = newFactory();
++
++    private static XMLInputFactory newFactory() {
++        XMLInputFactory f = XMLInputFactory.newFactory();
++        // CWE-611: no DTDs or external entities in meta.xml
++        f.setProperty(XMLInputFactory.SUPPORT_DTD, false);
++        f.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
++        return f;
++    }
+ 
+     public ReportMetadata read(InputStream xml) throws XMLStreamException {
+         var reader = factory.createXMLStreamReader(xml);
+diff --git a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+index 3c85516..ad0644d 100644
+--- a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
++++ b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+@@ -8,6 +8,7 @@ import java.util.Collections;
+ import java.util.Comparator;
+ import java.util.List;
+ 
++import javax.xml.XMLConstants;
+ import javax.xml.parsers.DocumentBuilder;
+ import javax.xml.parsers.DocumentBuilderFactory;
+ import javax.xml.parsers.ParserConfigurationException;
+@@ -29,6 +30,11 @@ public class StatementImporter {
+         try {
+             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+             factory.setNamespaceAware(true);
++            // CWE-611: reject DTDs and external entities so statements cannot read local files or call out
++            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
++            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
++            factory.setXIncludeAware(false);
++            factory.setExpandEntityReferences(false);
+             DocumentBuilder builder = factory.newDocumentBuilder();
+             doc = builder.parse(new ByteArrayInputStream(xml));
+         } catch (ParserConfigurationException e) {
+diff --git a/pom.xml b/pom.xml
+index 6c87c03..96212b0 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -27,7 +27,9 @@
+ 
+     <properties>
+         <java.version>17</java.version>
+-        <commons-configuration2.version>2.7</commons-configuration2.version>
++        <!-- CVE-2022-33980 fixed in 2.8.0; CVE-2022-42889 (Text4Shell) fixed in commons-text 1.10.0 -->
++        <commons-configuration2.version>2.15.1</commons-configuration2.version>
++        <commons-text.version>1.15.0</commons-text.version>
+     </properties>
+ 
+     <dependencyManagement>
+@@ -57,6 +59,11 @@
+                 <artifactId>commons-configuration2</artifactId>
+                 <version>${commons-configuration2.version}</version>
+             </dependency>
++            <dependency>
++                <groupId>org.apache.commons</groupId>
++                <artifactId>commons-text</artifactId>
++                <version>${commons-text.version}</version>
++            </dependency>
+         </dependencies>
+     </dependencyManagement>
+ </project>

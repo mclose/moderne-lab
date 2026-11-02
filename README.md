@@ -46,7 +46,8 @@ Lab 8 (agent drift vs. a recipe, with an exploitable toy app in 8b) on 2026-10-3
    recipe gives one patch every time. Lab 8b hands agents a scanner ticket for an app with seven real holes and judges
    each fix with live exploits: forty runs, forty patches, and a library upgrade that passes the build but stops the app.
    One added line, "start the app before you finish", got every agent to run it and ended the outages, but not the
-   holes the ticket didn't name.
+   holes the ticket didn't name. Naming them closed all seven in 30 of 30 runs; one generic "look past the ticket"
+   sentence did it in 28 of 30.
 
 ## What's on disk
 
@@ -81,7 +82,7 @@ moderne.ai/
     ├── ab/                    Lab 8: ab.sh, Dockerfile.agent (image `moderne-lab-agent`: Copilot CLI + JDK 21), rewrite.yml,
     │                          ws/ (five petclinic clones), results/ (patches, transcripts, costs, logs)
     ├── ab2/                   Lab 8b: ab2.sh, ledger/ (the toy app), probe/ (exploit probe), rewrite.yml, results/
-    ├── board/                 drift board: make_board_data.py → lab8-runs.csv, lab8b-runs.csv (+ lab8b-start-runs.csv), index.html
+    ├── board/                 drift board: make_board_data.py → lab8-runs.csv, lab8b-runs.csv (+ one lab8b-<variant>-runs.csv per prompt variant), index.html
     └── uninstall.sh           removes what the labs created, nothing else (--dry-run first)
 ```
 

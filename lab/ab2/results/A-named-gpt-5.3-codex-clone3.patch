@@ -1,0 +1,156 @@
+diff --git a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java
+index d293f6e..1bd7a13 100644
+--- a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java
++++ b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java
+@@ -5,6 +5,7 @@ import java.math.BigDecimal;
+ import java.util.ArrayList;
+ import java.util.List;
+ 
++import javax.xml.XMLConstants;
+ import javax.xml.parsers.SAXParser;
+ import javax.xml.parsers.SAXParserFactory;
+ 
+@@ -18,6 +19,12 @@ public class AccountListImporter {
+ 
+     public List<Account> parse(byte[] xml) throws Exception {
+         SAXParserFactory spf = SAXParserFactory.newInstance();
++        spf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
++        spf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
++        spf.setFeature("http://xml.org/sax/features/external-general-entities", false);
++        spf.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
++        spf.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
++        spf.setXIncludeAware(false);
+         SAXParser parser = spf.newSAXParser();
+         List<Account> out = new ArrayList<>();
+         parser.parse(new ByteArrayInputStream(xml), new DefaultHandler() {
+diff --git a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
+index ddfdfde..b2e86b6 100644
+--- a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
++++ b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
+@@ -31,16 +31,16 @@ public class AccountRepository {
+ 
+     // used by the branch search screen
+     public List<Account> findByOwner(String owner) {
+-        String sql = "select id, owner, balance, restricted from account where restricted = false and owner = '"
+-                + owner + "' order by id";
+-        return jdbc.query(sql, ROW);
++        String sql = "select id, owner, balance, restricted from account where restricted = false and owner = ? "
++                + "order by id";
++        return jdbc.query(sql, ROW, owner);
+     }
+ 
+     // used by the overdraft report; copied from findByOwner
+     public List<Account> findOverdrawn(String ownerPrefix) {
+         String sql = "select id, owner, balance, restricted from account where restricted = false and balance < 0 "
+-                + "and owner like '" + ownerPrefix + "%' order by id";
+-        return jdbc.query(sql, ROW);
++                + "and owner like ? order by id";
++        return jdbc.query(sql, ROW, ownerPrefix + "%");
+     }
+ 
+     public BigDecimal totalBalance() {
+diff --git a/ledger-common/pom.xml b/ledger-common/pom.xml
+index fb6ab4b..cf2fe45 100644
+--- a/ledger-common/pom.xml
++++ b/ledger-common/pom.xml
+@@ -14,7 +14,7 @@
+         <dependency>
+             <groupId>org.apache.commons</groupId>
+             <artifactId>commons-text</artifactId>
+-            <version>1.9</version>
++            <version>1.12.0</version>
+         </dependency>
+         <dependency>
+             <groupId>org.springframework</groupId>
+diff --git a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+index 8c2b27d..887a930 100644
+--- a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
++++ b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+@@ -31,7 +31,10 @@ public class ReportArchiveService {
+                 if (entry.isDirectory()) {
+                     continue;
+                 }
+-                var target = bundleDir.resolve(entry.getName());
++                var target = bundleDir.resolve(entry.getName()).normalize();
++                if (!target.startsWith(bundleDir)) {
++                    throw new IOException("invalid zip entry path: " + entry.getName());
++                }
+                 Files.createDirectories(target.getParent());
+                 Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                 files.add(entry.getName());
+diff --git a/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java b/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
+index eb23991..504bd0d 100644
+--- a/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
++++ b/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
+@@ -12,7 +12,14 @@ import org.springframework.stereotype.Component;
+ @Component
+ public class ReportMetadataReader {
+ 
+-    private final XMLInputFactory factory = XMLInputFactory.newFactory();
++    private final XMLInputFactory factory;
++
++    public ReportMetadataReader() {
++        this.factory = XMLInputFactory.newFactory();
++        this.factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
++        this.factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
++        this.factory.setProperty(XMLInputFactory.IS_REPLACING_ENTITY_REFERENCES, false);
++    }
+ 
+     public ReportMetadata read(InputStream xml) throws XMLStreamException {
+         var reader = factory.createXMLStreamReader(xml);
+diff --git a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+index 3c85516..6a93373 100644
+--- a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
++++ b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+@@ -8,6 +8,7 @@ import java.util.Collections;
+ import java.util.Comparator;
+ import java.util.List;
+ 
++import javax.xml.XMLConstants;
+ import javax.xml.parsers.DocumentBuilder;
+ import javax.xml.parsers.DocumentBuilderFactory;
+ import javax.xml.parsers.ParserConfigurationException;
+@@ -27,9 +28,7 @@ public class StatementImporter {
+     public List<StatementLine> importStatement(byte[] xml) throws StatementImportException {
+         Document doc;
+         try {
+-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+-            factory.setNamespaceAware(true);
+-            DocumentBuilder builder = factory.newDocumentBuilder();
++            DocumentBuilder builder = createSecureDocumentBuilder();
+             doc = builder.parse(new ByteArrayInputStream(xml));
+         } catch (ParserConfigurationException e) {
+             throw new StatementImportException("parser setup failed", e);
+@@ -57,6 +56,19 @@ public class StatementImporter {
+         return lines;
+     }
+ 
++    private static DocumentBuilder createSecureDocumentBuilder() throws ParserConfigurationException {
++        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
++        factory.setNamespaceAware(true);
++        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
++        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
++        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
++        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
++        factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
++        factory.setXIncludeAware(false);
++        factory.setExpandEntityReferences(false);
++        return factory.newDocumentBuilder();
++    }
++
+     private static String text(Element parent, String tag) {
+         NodeList nodes = parent.getElementsByTagName(tag);
+         if (nodes.getLength() == 0) {
+diff --git a/pom.xml b/pom.xml
+index 6c87c03..e0f93fd 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -27,7 +27,7 @@
+ 
+     <properties>
+         <java.version>17</java.version>
+-        <commons-configuration2.version>2.7</commons-configuration2.version>
++        <commons-configuration2.version>2.11.0</commons-configuration2.version>
+     </properties>
+ 
+     <dependencyManagement>

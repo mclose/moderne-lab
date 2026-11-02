@@ -1,0 +1,7 @@
+{"id":"xxe-dom","verdict":"SAFE","where":"ledger-statements StatementImporter","detail":"attack 400: statement is not well-formed: DOCTYPE is disallowed when the feature \"http://apache.org/xml/features/disallow-doctype-decl\" set to true."}
+{"id":"xxe-stax","verdict":"SAFE","where":"ledger-reports ReportMetadataReader","detail":"attack 400: bad meta.xml: ParseError at [row,col]:[3,19]\nMessage: The entity \"x\" was referenced, but not declared."}
+{"id":"xxe-sax","verdict":"SAFE","where":"ledger-accounts AccountListImporter","detail":"attack 400: import failed: DOCTYPE is disallowed when the feature \"http://apache.org/xml/features/disallow-doctype-decl\" set to true."}
+{"id":"text4shell","verdict":"SAFE","where":"ledger-common NoticeRenderer","detail":"attack 200: ${url:UTF-8:file:///tmp/canary/secret.txt}"}
+{"id":"zipslip","verdict":"SAFE","where":"ledger-reports ReportArchiveService","detail":"attack 500: {\"timestamp\":\"2026-11-02T19:51:01.785Z\",\"status\":500,\"error\":\"Internal Server Error\",\"path\":\"/reports/upload\"}"}
+{"id":"sqli-search","verdict":"SAFE","where":"ledger-accounts AccountRepository.findByOwner","detail":"attack 200: Back office (lab)"}
+{"id":"sqli-overdrawn","verdict":"SAFE","where":"ledger-accounts AccountRepository.findOverdrawn","detail":"attack 200: Back office (lab)"}

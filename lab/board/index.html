@@ -129,7 +129,7 @@
 
     <article class="db-card wide" id="l8b-story">
       <h2>What happened, in order</h2>
-      <p class="note">40 agent runs (eight models, five each) and the recipe, then 30 more runs with one extra line in the prompt.</p>
+      <p class="note">40 agent runs (eight models, five each) and the recipe, then three more rounds of 30 on six models, each with a different addition to the prompt.</p>
       <ol class="db-story">
         <li><b>Every build passed, agents and recipe alike.</b> <code>./mvnw verify</code> runs the unit tests, but it never starts the app, so it said “done” for every patch.</li>
         <li><b>Then each app was started and attacked, and 12 of 45 wouldn't start.</b> That was all five recipe runs (one patch, five times), 4 grok runs, 2 Sonnet runs and 1 MAI run. Every one of them had upgraded commons-configuration2 to 2.15.1. Every run that chose 2.12.0 or older, or removed the library, started. <span class="see">Chart: “The upgrade that stops the app”.</span></li>
@@ -140,9 +140,11 @@
         <li><b>No two of the 40 agent patches are the same.</b> Haiku and MAI repeated one Log4Shell patch exactly, but here they wrote five different patches each. On a one-line fix they look deterministic; on a real ticket they drift like the rest. Different patches still often led to the same probe result: every Haiku, gpt-6-luna and kimi-k3 run scored the same.</li>
         <li><b>Cost doesn't buy safety here.</b> Haiku's five runs cost 7.4 credits and grok's 320. Both left the unnamed XXEs open, and only grok's broke startup. <span class="see">Chart: “Cost for five runs”.</span></li>
         <li><b>One line in the prompt stopped the outage, but not the gaps.</b> Asked to start the app before finishing, all 30 runs on six models did, and all 30 started, against 27 of 30 without the line. Three Haiku runs still chose 2.15.1, hit the startup error and fixed the code around it. Both unnamed XXEs stayed open in 27 of 30, and credits went up about a third. <span class="see">Table: “Does one line in the prompt fix it?”.</span></li>
+        <li><b>Naming the holes closed them, every time.</b> The canary: the same ticket with the three missing holes listed as findings 6 to 8. All 30 runs on six models closed all seven and started. So the agents could fix every hole; they had fixed what they were asked to. <span class="see">Table: “What gets an agent past the ticket?”.</span></li>
+        <li><b>One generic sentence nearly did the same.</b> “The scanner may have missed other instances of these same problems. Check the rest of the code for them and fix those too.” It names no hole, and 28 of 30 runs closed all seven. The two misses were MAI runs that each found one unnamed XXE but not the other. It cost the most: 507 credits for 30 runs, against 354 for the start-the-app line alone.</li>
         <li><b>The canary holds.</b> The DOM XXE, Text4Shell and Zip Slip were closed by every run that started and by the recipe's code. So the tooling and the probe were working, and the gaps are real.</li>
       </ol>
-      <p class="db-verdict"><b>Bottom line:</b> nothing here was safe on its own. The recipe was consistent, the same bytes every time, but this time consistently broken. The agents were inconsistent and sometimes right. Without being told, almost no agent (1 of 40) and not the recipe started the app before calling the job done; told to, every agent did, and the outage went away. Neither change made anyone look past the ticket.</p>
+      <p class="db-verdict"><b>Bottom line:</b> the agents' gaps were scope, not skill. Told to start the app, every agent did and the outages stopped; told to look past the ticket, 58 of 60 runs closed all seven holes. But each of those lines had to be written by someone who knew what was missing, and all 90 of those patches were still different from each other. The recipe gave the same bytes every time, and that was its failure here: one bad version choice, repeated exactly. It also missed three holes. Fixing the recipe once fixes every repo it runs on; fixing an agent's result means checking every run.</p>
     </article>
 
     <div class="db-grid">
@@ -163,6 +165,20 @@
         <h2>Cost for five runs, by model</h2>
         <p class="note">AI credits for the same ticket. The end label is the most holes any one of its started runs closed.</p>
         <div class="db-chart" data-draw="l8b-credits-chart" data-source="l8b_by_model"></div>
+      </article>
+
+      <article class="db-card wide" id="l8b-prompts-card">
+        <h2>What gets an agent past the ticket?</h2>
+        <p class="note">The same six models, five fresh runs each, under four prompts. Each cell is <i>runs with all seven holes closed, of 5</i>, then the credits for those five runs. Every prompt after the first also asks the agent to start the app. <i>Named holes</i> lists the three holes the ticket left out; <i>Look past the ticket</i> adds only “The scanner may have missed other instances of these same problems. Check the rest of the code for them and fix those too.”</p>
+        <div class="db-scroll">
+          <table class="db-table" data-source="l8b_prompts" data-row-key="model">
+            <thead><tr>
+              <th data-field="model">Model</th><th data-field="ticket">Ticket only</th><th data-field="start">+ start the app</th>
+              <th data-field="named">+ named holes</th><th data-field="lookpast">+ look past the ticket</th>
+            </tr></thead>
+            <tbody data-draw="l8b-prompts"></tbody>
+          </table>
+        </div>
       </article>
 
       <article class="db-card wide" id="l8b-start-card">
@@ -192,6 +208,23 @@
               <th class="n" data-field="credits">Credits</th><th class="n" data-field="seconds">Seconds</th>
             </tr></thead>
             <tbody data-draw="l8b-start-rows"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="db-card wide" id="l8b-variant-table-card">
+        <h2>Every run with named holes or “look past the ticket”</h2>
+        <p class="note">Run on 2026-11-02. Same probe, same harness. All 60 builds passed and all 60 apps started; the ten runs on commons-configuration2 2.15.1 changed the code so the app starts on it. No two patches are the same.</p>
+        <div class="db-scroll">
+          <table class="db-table" data-source="l8b_variant_rows" data-row-key="run">
+            <thead><tr>
+              <th data-field="prompt">Prompt</th><th data-field="run">Run</th><th data-field="model">Model</th><th data-field="startup">Starts</th>
+              <th data-field="xxe-dom">XXE DOM</th><th data-field="xxe-stax">XXE StAX ◦</th><th data-field="xxe-sax">XXE SAX ◦</th><th data-field="text4shell">Text4Shell</th>
+              <th data-field="zipslip">Zip Slip</th><th data-field="sqli-search">SQLi search</th><th data-field="sqli-overdrawn">SQLi overdrawn ◦</th>
+              <th data-field="cfg2">config2</th><th class="n" data-field="files">Files</th><th data-field="patch">Patch</th>
+              <th class="n" data-field="credits">Credits</th><th class="n" data-field="seconds">Seconds</th>
+            </tr></thead>
+            <tbody data-draw="l8b-variant-rows"></tbody>
           </table>
         </div>
       </article>
@@ -358,6 +391,31 @@ dash.calc('l8b_start_compare', {
     const total = (i) => { const all = rows.map((r) => r[i]); return Object.fromEntries(Object.keys(all[0]).map((k) => [k, d3.sum(all, (x) => x[k])])); };
     return [...rows.map(([m, a, b]) => line(m, a, b)), line('all six', total(1), total(2))];
   },
+});
+
+dash.calc('l8b_prompts', {
+  title: 'Lab 8b by prompt',
+  description: 'For the six models run under every prompt: runs with all seven probes safe (of 5) and credits for the five runs, under the ticket alone, plus start-the-app, plus the named holes, and plus look-past-the-ticket.',
+  inputs: ['lab8b', 'lab8bstart', 'lab8bnamed', 'lab8blookpast'],
+  fn: (lab8b, start, named, lookpast) => {
+    const sets = { ticket: lab8b.filter((r) => r.run.startsWith('A-')), start, named, lookpast };
+    const cell = (rs) => {
+      const all7 = rs.filter((r) => r.startup === 'OK' && PROBES.every((k) => r[k] === 'SAFE')).length;
+      return { all7, n: rs.length, credits: d3.sum(rs, (r) => Number(r.credits) || 0) };
+    };
+    const fmt = (c) => `${c.all7} of ${c.n} · ${c.credits.toFixed(1)} cr`;
+    const models = [...new Set(lookpast.map((r) => r.model))];
+    const rows = models.map((m) => ({ model: m, ...Object.fromEntries(Object.entries(sets).map(([k, rs]) => [k, fmt(cell(rs.filter((r) => r.model === m)))])) }));
+    const all = Object.fromEntries(Object.entries(sets).map(([k, rs]) => [k, fmt(cell(rs.filter((r) => models.includes(r.model))))]));
+    return [...rows, { model: 'all six', ...all }];
+  },
+});
+
+dash.calc('l8b_variant_rows', {
+  title: 'Lab 8b named-holes and look-past runs',
+  description: 'Every run of the two 2026-11-02 prompts, with the prompt as a column.',
+  inputs: ['lab8bnamed', 'lab8blookpast'],
+  fn: (named, lookpast) => [...named.map((r) => ({ prompt: 'named holes', ...r })), ...lookpast.map((r) => ({ prompt: 'look past', ...r }))],
 });
 
 dash.calc('l8b_by_model', {
@@ -622,6 +680,9 @@ dash.draw('l8-version-chart', (el) => {
   table('l8-rows', 'lab8', [['run'], ['model'], ['fix'], ['log4j_core'], ['patch'], ['build'], ['credits', 1], ['seconds', 1], ['recipe_still_changes', 1]]);
   table('l8b-rows', 'lab8b', [['run'], ['model'], ['startup'], ['xxe-dom'], ['xxe-stax'], ['xxe-sax'], ['text4shell'], ['zipslip'], ['sqli-search'],
     ['sqli-overdrawn'], ['cfg2'], ['text'], ['files', 1], ['patch'], ['credits', 1], ['seconds', 1], ['recipe_still_changes', 1]]);
+  table('l8b-prompts', 'l8b_prompts', [['model'], ['ticket'], ['start'], ['named'], ['lookpast']]);
+  table('l8b-variant-rows', 'l8b_variant_rows', [['prompt'], ['run'], ['model'], ['startup'], ['xxe-dom'], ['xxe-stax'], ['xxe-sax'], ['text4shell'], ['zipslip'],
+    ['sqli-search'], ['sqli-overdrawn'], ['cfg2'], ['files', 1], ['patch'], ['credits', 1], ['seconds', 1]]);
   table('l8b-start-compare', 'l8b_start_compare', [['model'], ['started'], ['ran'], ['cfg215'], ['all7'], ['credits']]);
   table('l8b-start-rows', 'lab8bstart', [['run'], ['model'], ['agent_ran_jar'], ['startup'], ['xxe-dom'], ['xxe-stax'], ['xxe-sax'], ['text4shell'], ['zipslip'],
     ['sqli-search'], ['sqli-overdrawn'], ['cfg2'], ['text'], ['files', 1], ['patch'], ['credits', 1], ['seconds', 1]]);

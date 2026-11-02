@@ -156,6 +156,10 @@ PANEL="gpt-6-luna mai-code-1.1-flash kimi-k3 claude-haiku-5.5" ./ab2.sh panel
 ./ab2.sh crosscheck
 # the same ticket plus "start the app" (runs tagged start-<model>)
 VARIANT=start PANEL="claude-sonnet-5.5 gpt-5.3-codex kimi-k3 gpt-6-luna mai-code-1.1-flash claude-haiku-5.5" ./ab2.sh panel
+# the same, with the three unnamed holes added to the ticket, or with "look past the ticket" (start line kept in both)
+# BUDGET counts every credit the harness has logged, across months; raise it by each month's allowance
+BUDGET=2850 VARIANT=named PANEL="claude-sonnet-5.5 gpt-5.3-codex kimi-k3 gpt-6-luna mai-code-1.1-flash claude-haiku-5.5" ./ab2.sh panel
+BUDGET=2850 VARIANT=lookpast PANEL="claude-sonnet-5.5 gpt-5.3-codex kimi-k3 gpt-6-luna mai-code-1.1-flash claude-haiku-5.5" ./ab2.sh panel
 ```
 
 ### Results
@@ -241,10 +245,46 @@ own transcript: a shell command that runs the jar, or Spring Boot's startup line
   and probing the app takes more turns.
 - **Still no two patches alike.** 30 runs, 30 different patches.
 
-**The lesson for the course:** the deterministic tool is only as good as the recipe, and the agent is only as good as
-the ticket. Neither replaces running the app, and an agent will only run it if asked. One sentence in the ticket was
-enough for every model here. The recipe gave the same result every time, including the same
-production break every time. That is what makes it easy to find and fix once, in one place.
+### Two more prompts: name the holes, or look past the ticket
+
+The start-the-app round left one question open. Were the unnamed XXEs missed because the agents couldn't fix them,
+or because nobody asked? Two more rounds on 2026-11-02, the same six models, five fresh runs each, both keeping the
+start-the-app line:
+
+- **Named holes (the canary).** The ticket also lists the three holes it left out, as findings 6 to 8 with file and
+  line: the StAX XXE in `ReportMetadataReader`, the SAX XXE in `AccountListImporter`, and the second SQL injection in
+  `AccountRepository.findOverdrawn`.
+- **Look past the ticket.** The original five findings plus one generic sentence that names nothing: "The scanner may
+  have missed other instances of these same problems. Check the rest of the code for them and fix those too."
+
+Runs with all seven holes closed, of five, and the credits for those five runs:
+
+| Model | Ticket only | + start the app | + named holes | + look past the ticket |
+|---|---|---|---|---|
+| claude-sonnet-5.5 | 2 · 57.4 | 1 · 76.8 | 5 · 88.2 | 5 · 97.9 |
+| gpt-5.3-codex | 0 · 82.6 | 0 · 88.5 | 5 · 152.8 | 5 · 149.3 |
+| kimi-k3 | 0 · 97.5 | 0 · 154.0 | 5 · 141.7 | 5 · 209.7 |
+| gpt-6-luna | 0 · 10.9 | 0 · 13.2 | 5 · 11.3 | 5 · 13.6 |
+| mai-code-1.1-flash | 0 · 9.5 | 0 · 9.6 | 5 · 14.2 | 3 · 17.1 |
+| claude-haiku-5.5 | 0 · 7.4 | 0 · 12.4 | 5 · 14.1 | 5 · 18.9 |
+| **all six** | **2 of 30 · 265.3** | **1 of 30 · 354.4** | **30 of 30 · 422.4** | **28 of 30 · 506.6** |
+
+- **The gap was scope, not skill.** Named, every hole was closed in every run, by every model, cheap ones included.
+  Haiku closed all seven for 14 credits across five runs.
+- **One generic sentence got almost all the way.** 28 of 30 runs closed all seven without being told where to look.
+  The two misses were MAI runs: clone1 closed the SAX XXE but left StAX open, clone2 the reverse.
+- **Looking costs more.** 507 credits for the look-past round against 422 for the named one: the agents had to
+  search. kimi went from 142 to 210.
+- **Startup held.** All 60 apps started and every agent ran its app. Ten runs chose commons-configuration2 2.15.1,
+  hit the startup error, and changed the code so the app starts on it.
+- **Still no two patches alike.** 60 runs, 60 different patches, touching 7 to 15 files.
+
+**The lesson for the course:** an agent's reach ends where the prompt's does. Told to start the app, every agent did
+and the outages stopped. Told about the missing holes, or just told to look for more, nearly every run closed all
+seven. But someone has to know to write those lines, and every run still produced a different patch that has to be
+reviewed on its own. The recipe gave the same result every time: here that was the same production break, and the
+same three missed holes, every time. That consistency is the point. A recipe bug is found and fixed once, in one
+place, and the fix reaches every repo it runs on.
 
 ## Deviations from the brief, and harness bugs found along the way
 
@@ -281,13 +321,21 @@ production break every time. That is what makes it easy to find and fix once, in
   missed agents that sent the app's output to a file and then sent it real requests. The board accepts either
   signal. Neither appears in the unit-test output, which prints "Started LedgerApplicationTest". All 30 start-round
   transcripts show it; of the first 40, only gemini clone3.
+- **The per-run log line always said "(no probe results)".** Its Python summary used a backslash inside an f-string
+  expression, a syntax error before Python 3.12, and the error was hidden. The probe results themselves were always
+  written, and the board reads those, so no verdict changed. Fixed on 2026-11-02.
+- **The spend guard counts across months.** It adds up every credit in both labs' `spend.log`, so after the monthly
+  reset it had to be raised by hand (`BUDGET=2850`: 1,407 spent before plus this month's 1,450).
+- **One run was briefly "not available".** gpt-6-luna on named clone5 got "not available" once while every Luna run
+  around it worked. The harness skipped it as designed, and it was rerun by itself.
 - **An XML comment was read as a version choice.** kimi clone5 wrote "fixed in commons-configuration2 2.8.0+" in a
   pom comment, and the board script listed 2.8.0 next to the 2.10.1 it actually set. Comment lines are now skipped.
 
 ## The live board
 
 `lab/board/` holds the data and page behind the private "Agent drift board" artifact. `python3 -I
-lab/board/make_board_data.py [--dry-run]` rebuilds the CSVs from the result files. The page's charts read only those
+lab/board/make_board_data.py [--dry-run]` rebuilds the CSVs from the result files, one per prompt variant
+(`lab8b-<variant>-runs.csv`). The probe verdicts and spend logs are tracked in git, so a fresh clone rebuilds them. The page's charts read only those
 CSVs, and each tab opens with a plain-words "What happened, in order" summary.
 
 ## Cleanup

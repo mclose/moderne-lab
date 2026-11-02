@@ -1,0 +1,376 @@
+diff --git a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java
+index d293f6e..d574a1d 100644
+--- a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java
++++ b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java
+@@ -5,6 +5,7 @@ import java.math.BigDecimal;
+ import java.util.ArrayList;
+ import java.util.List;
+ 
++import javax.xml.XMLConstants;
+ import javax.xml.parsers.SAXParser;
+ import javax.xml.parsers.SAXParserFactory;
+ 
+@@ -18,7 +19,14 @@ public class AccountListImporter {
+ 
+     public List<Account> parse(byte[] xml) throws Exception {
+         SAXParserFactory spf = SAXParserFactory.newInstance();
++        spf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
++        spf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
++        spf.setFeature("http://xml.org/sax/features/external-general-entities", false);
++        spf.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
++        spf.setXIncludeAware(false);
+         SAXParser parser = spf.newSAXParser();
++        parser.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, "");
++        parser.setProperty(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+         List<Account> out = new ArrayList<>();
+         parser.parse(new ByteArrayInputStream(xml), new DefaultHandler() {
+             private String id;
+diff --git a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
+index ddfdfde..b2e86b6 100644
+--- a/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
++++ b/ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java
+@@ -31,16 +31,16 @@ public class AccountRepository {
+ 
+     // used by the branch search screen
+     public List<Account> findByOwner(String owner) {
+-        String sql = "select id, owner, balance, restricted from account where restricted = false and owner = '"
+-                + owner + "' order by id";
+-        return jdbc.query(sql, ROW);
++        String sql = "select id, owner, balance, restricted from account where restricted = false and owner = ? "
++                + "order by id";
++        return jdbc.query(sql, ROW, owner);
+     }
+ 
+     // used by the overdraft report; copied from findByOwner
+     public List<Account> findOverdrawn(String ownerPrefix) {
+         String sql = "select id, owner, balance, restricted from account where restricted = false and balance < 0 "
+-                + "and owner like '" + ownerPrefix + "%' order by id";
+-        return jdbc.query(sql, ROW);
++                + "and owner like ? order by id";
++        return jdbc.query(sql, ROW, ownerPrefix + "%");
+     }
+ 
+     public BigDecimal totalBalance() {
+diff --git a/ledger-accounts/src/test/java/com/example/ledger/accounts/AccountListImporterTest.java b/ledger-accounts/src/test/java/com/example/ledger/accounts/AccountListImporterTest.java
+index 5c0b3d2..2b1a899 100644
+--- a/ledger-accounts/src/test/java/com/example/ledger/accounts/AccountListImporterTest.java
++++ b/ledger-accounts/src/test/java/com/example/ledger/accounts/AccountListImporterTest.java
+@@ -1,10 +1,12 @@
+ package com.example.ledger.accounts;
+ 
+ import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertThrows;
+ 
+ import java.nio.charset.StandardCharsets;
+ 
+ import org.junit.jupiter.api.Test;
++import org.xml.sax.SAXException;
+ 
+ class AccountListImporterTest {
+ 
+@@ -17,6 +19,14 @@ class AccountListImporterTest {
+         assertEquals("J. Doe", list.get(0).owner());
+     }
+ 
++    @Test
++    void rejectsExternalEntities() {
++        var xml = "<!DOCTYPE accounts [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>"
++                + "<accounts><account id=\"GB01\" balance=\"1\">&xxe;</account></accounts>";
++        assertThrows(SAXException.class,
++                () -> new AccountListImporter().parse(xml.getBytes(StandardCharsets.UTF_8)));
++    }
++
+     @Test
+     void readsSettings() throws Exception {
+         assertEquals(50, new LedgerSettings().searchLimit());
+diff --git a/ledger-app/src/test/java/com/example/ledger/app/LedgerApplicationTest.java b/ledger-app/src/test/java/com/example/ledger/app/LedgerApplicationTest.java
+index 8a25b33..4a59c7b 100644
+--- a/ledger-app/src/test/java/com/example/ledger/app/LedgerApplicationTest.java
++++ b/ledger-app/src/test/java/com/example/ledger/app/LedgerApplicationTest.java
+@@ -1,6 +1,7 @@
+ package com.example.ledger.app;
+ 
+ import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertTrue;
+ 
+ import java.math.BigDecimal;
+ 
+@@ -21,4 +22,10 @@ class LedgerApplicationTest {
+         assertEquals(1, accounts.findByOwner("A. N. Other").size());
+         assertEquals(new BigDecimal("951505.15"), accounts.totalBalance());
+     }
++
++    @Test
++    void treatsAccountSearchInputAsData() {
++        assertTrue(accounts.findByOwner("' OR '1'='1").isEmpty());
++        assertTrue(accounts.findOverdrawn("' OR '1'='1' --").isEmpty());
++    }
+ }
+diff --git a/ledger-common/pom.xml b/ledger-common/pom.xml
+index fb6ab4b..23641a1 100644
+--- a/ledger-common/pom.xml
++++ b/ledger-common/pom.xml
+@@ -14,7 +14,6 @@
+         <dependency>
+             <groupId>org.apache.commons</groupId>
+             <artifactId>commons-text</artifactId>
+-            <version>1.9</version>
+         </dependency>
+         <dependency>
+             <groupId>org.springframework</groupId>
+diff --git a/ledger-common/src/main/java/com/example/ledger/common/FallbackLookup.java b/ledger-common/src/main/java/com/example/ledger/common/FallbackLookup.java
+deleted file mode 100644
+index e33f10c..0000000
+--- a/ledger-common/src/main/java/com/example/ledger/common/FallbackLookup.java
++++ /dev/null
+@@ -1,23 +0,0 @@
+-package com.example.ledger.common;
+-
+-import java.util.Map;
+-
+-import org.apache.commons.text.lookup.StringLookup;
+-
+-/** Template values first; anything else (date:, env: ...) goes to the standard lookups. */
+-class FallbackLookup implements StringLookup {
+-
+-    private final Map<String, String> values;
+-    private final StringLookup standard;
+-
+-    FallbackLookup(Map<String, String> values, StringLookup standard) {
+-        this.values = values;
+-        this.standard = standard;
+-    }
+-
+-    @Override
+-    public String lookup(String key) {
+-        String value = values.get(key);
+-        return value != null ? value : standard.lookup(key);
+-    }
+-}
+diff --git a/ledger-common/src/main/java/com/example/ledger/common/NoticeRenderer.java b/ledger-common/src/main/java/com/example/ledger/common/NoticeRenderer.java
+index cb52ecd..51436d6 100644
+--- a/ledger-common/src/main/java/com/example/ledger/common/NoticeRenderer.java
++++ b/ledger-common/src/main/java/com/example/ledger/common/NoticeRenderer.java
+@@ -7,14 +7,12 @@ import org.springframework.stereotype.Component;
+ 
+ /**
+  * Renders customer notices from templates kept by operations, e.g.
+- * "Dear ${name}, your balance on ${date:yyyy-MM-dd} is ${balance}."
++ * "Dear ${name}, your balance on ${date} is ${balance}."
+  */
+ @Component
+ public class NoticeRenderer {
+ 
+     public String render(String template, Map<String, String> values) {
+-        StringSubstitutor substitutor = StringSubstitutor.createInterpolator();
+-        substitutor.setVariableResolver(new FallbackLookup(values, substitutor.getStringLookup()));
+-        return substitutor.replace(template);
++        return new StringSubstitutor(values).replace(template);
+     }
+ }
+diff --git a/ledger-common/src/test/java/com/example/ledger/common/NoticeRendererTest.java b/ledger-common/src/test/java/com/example/ledger/common/NoticeRendererTest.java
+index 30b61b1..903e916 100644
+--- a/ledger-common/src/test/java/com/example/ledger/common/NoticeRendererTest.java
++++ b/ledger-common/src/test/java/com/example/ledger/common/NoticeRendererTest.java
+@@ -16,6 +16,11 @@ class NoticeRendererTest {
+         assertEquals("Dear Ada, your balance is 10.00.", out);
+     }
+ 
++    @Test
++    void doesNotEvaluateInterpolatorLookups() {
++        assertEquals("${env:PATH}", new NoticeRenderer().render("${env:PATH}", Map.of()));
++    }
++
+     @Test
+     void formatsMoneyWithBankersRounding() {
+         assertEquals("2.12", Money.format(new BigDecimal("2.125")));
+diff --git a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+index 8c2b27d..452a370 100644
+--- a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
++++ b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+@@ -24,14 +24,18 @@ public class ReportArchiveService {
+     }
+ 
+     public UnpackedBundle unpack(byte[] zip) throws IOException {
+-        var bundleDir = Files.createDirectories(root.resolve(UUID.randomUUID().toString()));
++        var bundleDir = Files.createDirectories(root.resolve(UUID.randomUUID().toString()))
++                .toAbsolutePath().normalize();
+         var files = new ArrayList<String>();
+         try (var in = new ZipInputStream(new ByteArrayInputStream(zip))) {
+             for (var entry = in.getNextEntry(); entry != null; entry = in.getNextEntry()) {
+                 if (entry.isDirectory()) {
+                     continue;
+                 }
+-                var target = bundleDir.resolve(entry.getName());
++                var target = bundleDir.resolve(entry.getName()).normalize();
++                if (!target.startsWith(bundleDir) || target.equals(bundleDir)) {
++                    throw new IOException("Zip entry escapes bundle directory: " + entry.getName());
++                }
+                 Files.createDirectories(target.getParent());
+                 Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                 files.add(entry.getName());
+diff --git a/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java b/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
+index eb23991..0014f6b 100644
+--- a/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
++++ b/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
+@@ -2,6 +2,7 @@ package com.example.ledger.reports;
+ 
+ import java.io.InputStream;
+ 
++import javax.xml.XMLConstants;
+ import javax.xml.stream.XMLInputFactory;
+ import javax.xml.stream.XMLStreamConstants;
+ import javax.xml.stream.XMLStreamException;
+@@ -12,7 +13,15 @@ import org.springframework.stereotype.Component;
+ @Component
+ public class ReportMetadataReader {
+ 
+-    private final XMLInputFactory factory = XMLInputFactory.newFactory();
++    private final XMLInputFactory factory = createSecureFactory();
++
++    private static XMLInputFactory createSecureFactory() {
++        XMLInputFactory factory = XMLInputFactory.newFactory();
++        factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
++        factory.setProperty("javax.xml.stream.isSupportingExternalEntities", false);
++        factory.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, "");
++        return factory;
++    }
+ 
+     public ReportMetadata read(InputStream xml) throws XMLStreamException {
+         var reader = factory.createXMLStreamReader(xml);
+diff --git a/ledger-reports/src/test/java/com/example/ledger/reports/ReportArchiveServiceTest.java b/ledger-reports/src/test/java/com/example/ledger/reports/ReportArchiveServiceTest.java
+index 9306b39..05784fa 100644
+--- a/ledger-reports/src/test/java/com/example/ledger/reports/ReportArchiveServiceTest.java
++++ b/ledger-reports/src/test/java/com/example/ledger/reports/ReportArchiveServiceTest.java
+@@ -1,16 +1,20 @@
+ package com.example.ledger.reports;
+ 
+ import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertThrows;
+ import static org.junit.jupiter.api.Assertions.assertTrue;
+ 
+ import java.io.ByteArrayInputStream;
+ import java.io.ByteArrayOutputStream;
++import java.io.IOException;
+ import java.nio.charset.StandardCharsets;
+ import java.nio.file.Files;
+ import java.nio.file.Path;
+ import java.util.zip.ZipEntry;
+ import java.util.zip.ZipOutputStream;
+ 
++import javax.xml.stream.XMLStreamException;
++
+ import org.junit.jupiter.api.Test;
+ import org.junit.jupiter.api.io.TempDir;
+ 
+@@ -32,6 +36,18 @@ class ReportArchiveServiceTest {
+         assertTrue(Files.exists(bundle.dir().resolve("october/balances.csv")));
+     }
+ 
++    @Test
++    void rejectsArchiveEntriesOutsideBundleDirectory() throws Exception {
++        var bytes = new ByteArrayOutputStream();
++        try (var zip = new ZipOutputStream(bytes)) {
++            zip.putNextEntry(new ZipEntry("../escaped.csv"));
++            zip.write("outside".getBytes(StandardCharsets.UTF_8));
++            zip.closeEntry();
++        }
++        assertThrows(IOException.class, () -> new ReportArchiveService(root).unpack(bytes.toByteArray()));
++        assertTrue(Files.notExists(root.resolve("escaped.csv")));
++    }
++
+     @Test
+     void readsMetadata() throws Exception {
+         var xml = "<report><title>Month end</title><branch>Leeds</branch><period>2026-10</period></report>";
+@@ -39,4 +55,12 @@ class ReportArchiveServiceTest {
+         assertEquals("Month end", meta.title());
+         assertEquals("2026-10", meta.period());
+     }
++
++    @Test
++    void rejectsExternalEntitiesInMetadata() {
++        var xml = "<!DOCTYPE report [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>"
++                + "<report><title>&xxe;</title></report>";
++        assertThrows(XMLStreamException.class,
++                () -> new ReportMetadataReader().read(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8))));
++    }
+ }
+diff --git a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+index 3c85516..085d954 100644
+--- a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
++++ b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+@@ -8,6 +8,7 @@ import java.util.Collections;
+ import java.util.Comparator;
+ import java.util.List;
+ 
++import javax.xml.XMLConstants;
+ import javax.xml.parsers.DocumentBuilder;
+ import javax.xml.parsers.DocumentBuilderFactory;
+ import javax.xml.parsers.ParserConfigurationException;
+@@ -29,6 +30,14 @@ public class StatementImporter {
+         try {
+             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+             factory.setNamespaceAware(true);
++            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
++            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
++            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
++            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
++            factory.setXIncludeAware(false);
++            factory.setExpandEntityReferences(false);
++            factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
++            factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+             DocumentBuilder builder = factory.newDocumentBuilder();
+             doc = builder.parse(new ByteArrayInputStream(xml));
+         } catch (ParserConfigurationException e) {
+diff --git a/ledger-statements/src/test/java/com/example/ledger/statements/StatementImporterTest.java b/ledger-statements/src/test/java/com/example/ledger/statements/StatementImporterTest.java
+index a4e366f..a2c72fb 100644
+--- a/ledger-statements/src/test/java/com/example/ledger/statements/StatementImporterTest.java
++++ b/ledger-statements/src/test/java/com/example/ledger/statements/StatementImporterTest.java
+@@ -1,6 +1,7 @@
+ package com.example.ledger.statements;
+ 
+ import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertThrows;
+ 
+ import java.nio.charset.StandardCharsets;
+ import java.util.List;
+@@ -23,4 +24,13 @@ class StatementImporterTest {
+         assertEquals("salary", lines.get(0).getMemo());
+         assertEquals("-12.50", lines.get(1).getAmount().toPlainString());
+     }
++
++    @Test
++    void rejectsExternalEntities() {
++        String xml = "<!DOCTYPE statement [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>"
++                + "<statement><entry><bookingDate>2026-10-01</bookingDate><amount>1</amount>"
++                + "<memo>&xxe;</memo></entry></statement>";
++        assertThrows(StatementImportException.class,
++                () -> new StatementImporter().importStatement(xml.getBytes(StandardCharsets.UTF_8)));
++    }
+ }
+diff --git a/pom.xml b/pom.xml
+index 6c87c03..b7b0a26 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -27,7 +27,8 @@
+ 
+     <properties>
+         <java.version>17</java.version>
+-        <commons-configuration2.version>2.7</commons-configuration2.version>
++        <commons-configuration2.version>2.11.0</commons-configuration2.version>
++        <commons-text.version>1.12.0</commons-text.version>
+     </properties>
+ 
+     <dependencyManagement>
+@@ -57,6 +58,11 @@
+                 <artifactId>commons-configuration2</artifactId>
+                 <version>${commons-configuration2.version}</version>
+             </dependency>
++            <dependency>
++                <groupId>org.apache.commons</groupId>
++                <artifactId>commons-text</artifactId>
++                <version>${commons-text.version}</version>
++            </dependency>
+         </dependencies>
+     </dependencyManagement>
+ </project>
