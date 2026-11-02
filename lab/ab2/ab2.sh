@@ -4,7 +4,7 @@
 #   ./ab2.sh baseline          verify + exploit probes on the untouched app
 #   ./ab2.sh recipe [N...]     Side B: lab.LedgerScannerFindings via the OpenRewrite Maven plugin; hash the patches
 #   ./ab2.sh agent [N...]      Side A: one fresh Copilot session per clone; MODEL=..., optional TAG=...
-#   ./ab2.sh panel [N...]      the same prompt on PANEL="m1 m2 ..." models, in rounds; VARIANT=start adds "start the app"
+#   ./ab2.sh panel [N...]      the same prompt on PANEL="m1 m2 ..." models, in rounds; VARIANT=start|named|lookpast (see below)
 #   ./ab2.sh crosscheck        run the recipe (dry run) on every agent result: what would it still change?
 #   ./ab2.sh status            what's done so far
 #   ./ab2.sh reset [--dry-run] delete ws/ and results/
@@ -31,11 +31,21 @@ Our security scanner (weekly SCA + SAST run) reported these findings for this re
 4. HIGH      CWE-22 Path traversal in archive extraction (Zip Slip)  ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java:34
 5. HIGH      CWE-89 SQL injection  ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java:36
 EOF
-# VARIANT=start: the same ticket plus one line asking the agent to start the app. Its runs are tagged start-<model>.
+# Variants, each tagged <variant>-<model>. All three add the start-the-app line.
+#   start     the same ticket
+#   named     the ticket also lists the three holes it left out (the canary: can agents fix them when told?)
+#   lookpast  the same ticket plus one line asking the agent to look for other instances of the same problems
+START=$'\n\nBefore you finish, build the app jar (ledger-app) and start it to confirm it actually runs.'
 case "${VARIANT:-}" in
   "") ;;
-  start) PROMPT+=$'\n\nBefore you finish, build the app jar (ledger-app) and start it to confirm it actually runs.' ;;
-  *) echo "ERROR: VARIANT must be empty or 'start'" >&2; exit 1 ;;
+  start) PROMPT+=$START ;;
+  named) PROMPT+=$'\n6. HIGH      CWE-611 XML External Entity (XXE) injection  ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java:18'
+         PROMPT+=$'\n7. HIGH      CWE-611 XML External Entity (XXE) injection  ledger-accounts/src/main/java/com/example/ledger/accounts/AccountListImporter.java:23'
+         PROMPT+=$'\n8. HIGH      CWE-89 SQL injection  ledger-accounts/src/main/java/com/example/ledger/accounts/AccountRepository.java:42'
+         PROMPT+=$START ;;
+  lookpast) PROMPT+=$'\n\nThe scanner may have missed other instances of these same problems. Check the rest of the code for them and fix those too.'
+            PROMPT+=$START ;;
+  *) echo "ERROR: VARIANT must be empty, 'start', 'named' or 'lookpast'" >&2; exit 1 ;;
 esac
 
 step() { echo; echo "######## $* ($(date +%T))"; }
@@ -62,7 +72,7 @@ check() {
   printf '%s verify=%s  ' "$name" "$(cat "$OUT/$name.verify")"
   python3 -I -c 'import json,sys
 r=[json.loads(l) for l in open(sys.argv[1])]
-print(" ".join(f"{x[\"id\"]}={x[\"verdict\"]}" for x in r))' "$OUT/$name.probe.jsonl" 2>/dev/null || echo "(no probe results)"
+print(" ".join("%s=%s" % (x["id"], x["verdict"]) for x in r))' "$OUT/$name.probe.jsonl" 2>/dev/null || echo "(no probe results)"
 }
 
 clean_baseline() {  # clean_baseline <n>: back to the baseline commit with no untracked or ignored files

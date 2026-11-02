@@ -4,8 +4,8 @@
     .venv-free: plain python3 -I board/make_board_data.py [--dry-run]
 
 Reads lab/ab/results and lab/ab2/results (never writes there) and writes
-board/lab8-runs.csv, board/lab8b-runs.csv and, once
-the start-the-app variant has run, board/lab8b-start-runs.csv. --dry-run prints the rows instead.
+board/lab8-runs.csv, board/lab8b-runs.csv and, for each prompt variant that has run
+(ab2.sh VARIANT=...), board/lab8b-<variant>-runs.csv. --dry-run prints the rows instead.
 Every value comes from a result file; a value that is missing stays empty.
 """
 import csv
@@ -31,6 +31,7 @@ LAB8_FIX = {
     "6c3163": "Use ${log4j2.version}, add log4j-api",
     "638d7d": "Drop the version, add a comment",
 }
+VARIANTS = ("start", "named", "lookpast")  # ab2.sh prompt variants; their runs are tagged <variant>-<model>
 PROBES = ["xxe-dom", "xxe-stax", "xxe-sax", "text4shell", "zipslip", "sqli-search", "sqli-overdrawn"]
 
 
@@ -128,14 +129,18 @@ def ran_jar(name: str) -> str:
     return "yes" if ran else "no"
 
 
-def lab8b_start():
-    """VARIANT=start runs: the same ticket plus one line asking the agent to start the app."""
+def variant_of(model: str) -> str:
+    return next((v for v in VARIANTS if model.startswith(f"{v}-")), "")
+
+
+def lab8b_variant(variant: str):
+    """Runs of one ab2.sh prompt variant (start, named, lookpast); see the VARIANT block in ab2.sh."""
     rows = []
     for name, model, n, p in runs(AB2):
-        if not model.startswith("start-"):
+        if variant_of(model) != variant:
             continue
         cfg, txt = versions(p)
-        rows.append({"run": name, "model": model.removeprefix("start-"), "clone": n, "patch": sha6(p),
+        rows.append({"run": name, "model": model.removeprefix(f"{variant}-"), "clone": n, "patch": sha6(p),
                      "files": files_in(p), "build": read(AB2 / f"{name}.verify").strip(),
                      "credits": credits(AB2 / f"{name}.cost"), "seconds": seconds(AB2 / f"{name}.seconds"),
                      "cfg2": cfg, "text": txt, "agent_ran_jar": ran_jar(name), **probe(name)})
@@ -149,7 +154,7 @@ def lab8b():
                  "build": read(AB2 / "baseline.verify").strip(), "credits": "0", "seconds": "",
                  "cfg2": "2.7", "text": "1.9", **base, "recipe_still_changes": "", "agent_ran_jar": ""})
     for name, model, n, p in runs(AB2):
-        if model.startswith("start-"):  # the start-the-app variant has its own file
+        if variant_of(model):  # each prompt variant has its own file
             continue
         cfg, txt = versions(p)
         rows.append({"run": name, "model": model, "clone": n, "patch": sha6(p), "files": files_in(p),
@@ -191,5 +196,6 @@ if __name__ == "__main__":
     dry = args == ["--dry-run"]
     write("lab8-runs.csv", lab8(), dry)
     write("lab8b-runs.csv", lab8b(), dry)
-    if start := lab8b_start():
-        write("lab8b-start-runs.csv", start, dry)
+    for v in VARIANTS:
+        if rows := lab8b_variant(v):
+            write(f"lab8b-{v}-runs.csv", rows, dry)
