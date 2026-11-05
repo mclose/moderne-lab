@@ -9,6 +9,7 @@ set -euo pipefail
 LAB="$(cd "$(dirname "$0")" && pwd)"
 DEMO="$LAB/cli/ws/local/ai-found-cves"
 "$LAB/cli/seed-demo.sh"
+mkdir -p "$LAB/.m2"
 SEC=org.openrewrite.recipe:rewrite-java-security:3.38.1
 mvn() {
   docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -e MAVEN_CONFIG=/tmp/.m2 -e MAVEN_OPTS=-Duser.home=/tmp \

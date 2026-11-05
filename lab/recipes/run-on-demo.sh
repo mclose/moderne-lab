@@ -7,6 +7,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 LAB="$(cd "$HERE/.." && pwd)"
 DEMO="$LAB/cli/ws/local/ai-found-cves"
 "$LAB/cli/seed-demo.sh"
+mkdir -p "$LAB/.m2"
 GOAL="${1:?dryRun or run}"; RECIPES="${2:?recipe name(s), comma-separated}"
 docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -e MAVEN_CONFIG=/tmp/.m2 -e MAVEN_OPTS=-Duser.home=/tmp \
   -v "$LAB/.m2":/m2 -v "$DEMO":/src -w /src maven:3.9-eclipse-temurin-17 \

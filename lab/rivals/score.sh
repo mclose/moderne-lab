@@ -5,6 +5,7 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 LAB="$(cd "$HERE/.." && pwd)"
+mkdir -p "$LAB/.m2"
 BASE=1db99db
 for d in "$HERE"/ws/petclinic-*; do
   t="${d##*-}"
