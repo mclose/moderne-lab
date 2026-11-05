@@ -12,6 +12,10 @@ plus a security finding in a file most people never look at. Everything here is 
 Results below are from **2026-10-28 on Moderne CLI 4.12.0**, `rewrite-migrate-java` as installed in Lab 2,
 `rewrite-github-actions` 3.29.0. I ran it twice: by hand, then with `demo.sh`. Both runs gave the same results.
 
+**Rerun 2026-11-05 on Moderne CLI 4.12.3** (fresh image built with the caller's uid): `demo.sh` passed end to end in
+7 min 19 s. Same patch sha256 `8456b8ed…283235` as on 2026-10-28, 4 files changed, empty rerun, `mvnw verify` exit 0 on JDK 21,
+and the same 5 tag-pinned actions. A week and a CLI patch release apart, the patch didn't change.
+
 ## The whole thing in one command
 
 ```bash
