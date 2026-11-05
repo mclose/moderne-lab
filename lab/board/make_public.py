@@ -42,6 +42,7 @@ HEAD = """<!doctype html>
     --cds-gap-xs: .25rem; --cds-gap-sm: .5rem; --cds-gap-md: .9rem; --cds-gap-lg: 1.4rem; --cds-gap-xl: 2rem;
     --cds-pad-xs: .25rem; --cds-pad-sm: .5rem; --cds-pad-md: .75rem; --cds-pad-lg: 1.1rem;
   }
+  [hidden] { display: none !important; }
   body { background: #f6f5fa; color: var(--color-fg); margin: 0; padding: 24px 16px 48px; }
   .pub-note { max-width: 82rem; margin: 0 auto 16px; font: .85rem var(--font-anthropic-sans); color: var(--color-fg-muted); }
   .pub-note a { color: inherit; }
