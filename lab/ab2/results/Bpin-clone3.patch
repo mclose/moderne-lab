@@ -1,0 +1,132 @@
+diff --git a/ledger-accounts/pom.xml b/ledger-accounts/pom.xml
+index f1e61e1..367a1f5 100644
+--- a/ledger-accounts/pom.xml
++++ b/ledger-accounts/pom.xml
+@@ -9,6 +9,15 @@
+     </parent>
+     <artifactId>ledger-accounts</artifactId>
+     <name>Ledger Accounts</name>
++    <dependencyManagement>
++        <dependencies>
++            <dependency>
++                <groupId>org.apache.commons</groupId>
++                <artifactId>commons-text</artifactId>
++                <version>1.15.0</version>
++            </dependency>
++        </dependencies>
++    </dependencyManagement>
+ 
+     <dependencies>
+         <dependency>
+diff --git a/ledger-app/pom.xml b/ledger-app/pom.xml
+index d031e48..c6b4226 100644
+--- a/ledger-app/pom.xml
++++ b/ledger-app/pom.xml
+@@ -9,6 +9,15 @@
+     </parent>
+     <artifactId>ledger-app</artifactId>
+     <name>Ledger App</name>
++    <dependencyManagement>
++        <dependencies>
++            <dependency>
++                <groupId>org.apache.commons</groupId>
++                <artifactId>commons-text</artifactId>
++                <version>1.15.0</version>
++            </dependency>
++        </dependencies>
++    </dependencyManagement>
+ 
+     <dependencies>
+         <dependency>
+diff --git a/ledger-common/pom.xml b/ledger-common/pom.xml
+index fb6ab4b..69f0b58 100644
+--- a/ledger-common/pom.xml
++++ b/ledger-common/pom.xml
+@@ -14,7 +14,7 @@
+         <dependency>
+             <groupId>org.apache.commons</groupId>
+             <artifactId>commons-text</artifactId>
+-            <version>1.9</version>
++            <version>1.15.0</version>
+         </dependency>
+         <dependency>
+             <groupId>org.springframework</groupId>
+diff --git a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+index 8c2b27d..3d17c82 100644
+--- a/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
++++ b/ledger-reports/src/main/java/com/example/ledger/reports/ReportArchiveService.java
+@@ -32,6 +32,9 @@ public class ReportArchiveService {
+                     continue;
+                 }
+                 var target = bundleDir.resolve(entry.getName());
++                if (!target.normalize().startsWith(bundleDir.normalize())) {
++                    throw new IOException("Bad zip entry");
++                }
+                 Files.createDirectories(target.getParent());
+                 Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                 files.add(entry.getName());
+diff --git a/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java b/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
+index eb23991..862dccf 100644
+--- a/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
++++ b/ledger-reports/src/main/java/com/example/ledger/reports/ReportMetadataReader.java
+@@ -14,6 +14,11 @@ public class ReportMetadataReader {
+ 
+     private final XMLInputFactory factory = XMLInputFactory.newFactory();
+ 
++    {
++        factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
++        factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
++    }
++
+     public ReportMetadata read(InputStream xml) throws XMLStreamException {
+         var reader = factory.createXMLStreamReader(xml);
+         String title = null, branch = null, period = null;
+diff --git a/ledger-statements/pom.xml b/ledger-statements/pom.xml
+index b1cafd9..a56bcb5 100644
+--- a/ledger-statements/pom.xml
++++ b/ledger-statements/pom.xml
+@@ -9,6 +9,15 @@
+     </parent>
+     <artifactId>ledger-statements</artifactId>
+     <name>Ledger Statements</name>
++    <dependencyManagement>
++        <dependencies>
++            <dependency>
++                <groupId>org.apache.commons</groupId>
++                <artifactId>commons-text</artifactId>
++                <version>1.15.0</version>
++            </dependency>
++        </dependencies>
++    </dependencyManagement>
+ 
+     <dependencies>
+         <dependency>
+diff --git a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+index 3c85516..07e4b22 100644
+--- a/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
++++ b/ledger-statements/src/main/java/com/example/ledger/statements/StatementImporter.java
+@@ -28,6 +28,11 @@ public class StatementImporter {
+         Document doc;
+         try {
+             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
++            try {
++                factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
++            } catch (ParserConfigurationException e) {
++                throw new IllegalStateException("ParserConfigurationException was thrown. The feature 'disallow-doctype-decl' is not supported by your XML processor.", e);
++            }
+             factory.setNamespaceAware(true);
+             DocumentBuilder builder = factory.newDocumentBuilder();
+             doc = builder.parse(new ByteArrayInputStream(xml));
+diff --git a/pom.xml b/pom.xml
+index 6c87c03..cdf8636 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -27,7 +27,7 @@
+ 
+     <properties>
+         <java.version>17</java.version>
+-        <commons-configuration2.version>2.7</commons-configuration2.version>
++        <commons-configuration2.version>2.12.0</commons-configuration2.version>
+     </properties>
+ 
+     <dependencyManagement>

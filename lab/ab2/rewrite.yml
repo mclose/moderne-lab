@@ -20,3 +20,27 @@ recipeList:
   - org.openrewrite.java.security.XmlParserXXEVulnerability
   - org.openrewrite.java.security.ZipSlip
   - org.openrewrite.java.security.FixSqlInjectionConcat
+---
+# Rerun 2026-11-05: the same recipe with commons-configuration2 pinned to 2.12.0 instead of 2.15.1.
+# 2.15.1's URL-scheme allowlist rejects Spring Boot's nested: jar URLs, so the jar won't start.
+# 2.12.0 was the version agents chose most often, and every agent run on it started.
+type: specs.openrewrite.org/v1beta/recipe
+name: lab.LedgerScannerFindingsPinned
+displayName: Fix the ledger scanner findings (commons-configuration2 pinned to 2.12.0)
+description: lab.LedgerScannerFindings with commons-configuration2 2.12.0, the newest version agents used that keeps the Boot jar starting.
+recipeList:
+  - org.openrewrite.java.dependencies.UpgradeDependencyVersion:
+      groupId: org.apache.commons
+      artifactId: commons-text
+      newVersion: 1.15.0
+  - org.openrewrite.java.dependencies.UpgradeTransitiveDependencyVersion:
+      groupId: org.apache.commons
+      artifactId: commons-text
+      version: 1.15.0
+  - org.openrewrite.java.dependencies.UpgradeDependencyVersion:
+      groupId: org.apache.commons
+      artifactId: commons-configuration2
+      newVersion: 2.12.0
+  - org.openrewrite.java.security.XmlParserXXEVulnerability
+  - org.openrewrite.java.security.ZipSlip
+  - org.openrewrite.java.security.FixSqlInjectionConcat

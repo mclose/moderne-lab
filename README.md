@@ -47,7 +47,8 @@ Lab 8 (agent drift vs. a recipe, with an exploitable toy app in 8b) on 2026-10-3
    each fix with live exploits: forty runs, forty patches, and a library upgrade that passes the build but stops the app.
    One added line, "start the app before you finish", got every agent to run it and ended the outages, but not the
    holes the ticket didn't name. Naming them closed all seven in 30 of 30 runs; one generic "look past the ticket"
-   sentence did it in 28 of 30.
+   sentence did it in 28 of 30. The recipe's outage came from the version I pinned in it: changed to 2.12.0, its five
+   identical patches start and close the same 4 of 7 every time.
 
 ## What's on disk
 

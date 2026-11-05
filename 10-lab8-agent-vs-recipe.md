@@ -160,6 +160,8 @@ VARIANT=start PANEL="claude-sonnet-5.5 gpt-5.3-codex kimi-k3 gpt-6-luna mai-code
 # BUDGET counts every credit the harness has logged, across months; raise it by each month's allowance
 BUDGET=2850 VARIANT=named PANEL="claude-sonnet-5.5 gpt-5.3-codex kimi-k3 gpt-6-luna mai-code-1.1-flash claude-haiku-5.5" ./ab2.sh panel
 BUDGET=2850 VARIANT=lookpast PANEL="claude-sonnet-5.5 gpt-5.3-codex kimi-k3 gpt-6-luna mai-code-1.1-flash claude-haiku-5.5" ./ab2.sh panel
+# the recipe again, with commons-configuration2 pinned to 2.12.0 (results tagged Bpin-*)
+RECIPE=lab.LedgerScannerFindingsPinned RTAG=pin ./ab2.sh recipe
 ```
 
 ### Results
@@ -178,6 +180,7 @@ The first 20 ran on 2026-10-30. The second four models ran on 2026-10-31, with t
 | mai-code-1.1-flash | 4 of 5 | 0 | 5 of 7: both unnamed XXEs open | 9.5 |
 | claude-haiku-5.5 | 5 of 5 | 0 | 5 of 7: both unnamed XXEs open | 7.4 |
 | recipe (5 identical patches) | 0 of 5 | 0 | app won't start | 0 |
+| recipe, config2 pinned to 2.12.0 (5 identical patches, 2026-11-05) | 5 of 5 | 0 | 4 of 7: SAX XXE and both SQL injections open | 0 |
 
 - **The upgrade trap.** commons-configuration2 2.15.1, the newest release, added a URL-scheme allowlist that
   rejects Spring Boot's `nested:` jar URLs. `ConfigurationDeniedException: URL scheme "nested" is not enabled`, and
@@ -212,6 +215,16 @@ is an outage. That is what the board's red recipe row shows, and it is the hones
 changes are still correct (the held-at-2.7 build above), and they closed the StAX XXE that 31 of 33 started agent runs
 missed. DOM XXE, Text4Shell and Zip Slip work as a canary: every started agent run and the recipe's code fixed them,
 which shows the tooling and the probe were working.
+
+**The recipe, fixed once (2026-11-05).** The outage came from one value I wrote into the recipe:
+`newVersion: 2.15.1` for commons-configuration2, picked because it was the newest release. `lab.LedgerScannerFindingsPinned`
+in `lab/ab2/rewrite.yml` is the same recipe with that one value changed to 2.12.0, the version agents chose most often
+(30 patches), and every agent run on it started. Five fresh runs from the baseline gave five byte-identical patches,
+sha256 `0c888575…d43d21`. They differ from the original recipe's patch in exactly that one pom line. `mvnw clean verify`
+passed, the jar started, and the probe gave **DOM XXE, StAX XXE, Text4Shell and Zip Slip SAFE; SAX XXE and both SQL
+injections VULNERABLE**: the same 4 of 7 as the held-at-2.7 validation build, now on a build that ships. A typical
+started agent run scored 5 of 7 with a different 5: both SQL injections closed, StAX and SAX open. I didn't test
+2.13 or 2.14, so I don't know which release brought in the allowlist.
 
 ### One more line in the prompt: "start the app"
 

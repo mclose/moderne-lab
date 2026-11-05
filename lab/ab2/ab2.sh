@@ -3,6 +3,7 @@
 #   ./ab2.sh setup             5 identical clones of ./ledger (fixed commit dates -> same hashes)
 #   ./ab2.sh baseline          verify + exploit probes on the untouched app
 #   ./ab2.sh recipe [N...]     Side B: lab.LedgerScannerFindings via the OpenRewrite Maven plugin; hash the patches
+#                              RECIPE=lab.LedgerScannerFindingsPinned RTAG=pin: the same with config2 pinned to 2.12.0
 #   ./ab2.sh agent [N...]      Side A: one fresh Copilot session per clone; MODEL=..., optional TAG=...
 #   ./ab2.sh panel [N...]      the same prompt on PANEL="m1 m2 ..." models, in rounds; VARIANT=start|named|lookpast (see below)
 #   ./ab2.sh crosscheck        run the recipe (dry run) on every agent result: what would it still change?
@@ -15,7 +16,8 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WS="$HERE/ws" OUT="$HERE/results" SRC="$HERE/ledger"
-RECIPE=lab.LedgerScannerFindings
+RECIPE=${RECIPE:-lab.LedgerScannerFindings}
+RTAG=${RTAG:-}   # recipe result tag: RECIPE=lab.LedgerScannerFindingsPinned RTAG=pin -> Bpin-clone*.patch, branch side-bpin
 PLUGIN=org.openrewrite.maven:rewrite-maven-plugin:6.46.1
 RECIPE_JARS=org.openrewrite.recipe:rewrite-java-security:3.38.1,org.openrewrite.recipe:rewrite-java-dependencies:1.60.2
 TOKEN_FILE="${COPILOT_TOKEN_FILE:-$HOME/.config/moderne-lab/copilot.token}"
@@ -105,18 +107,18 @@ cmd_recipe() {
   for n in $(pick "$@"); do
     clean_baseline "$n"; d=$(clone_dir "$n")
     step "Side B clone$n: $RECIPE (OpenRewrite Maven plugin)"
-    mvn_in "$n" "B-clone$n" "mvn -B $PLUGIN:run -Drewrite.configLocation=/lab/rewrite.yml \
-      -Drewrite.activeRecipes=$RECIPE -Drewrite.recipeArtifactCoordinates=$RECIPE_JARS" || die "recipe failed (logs/B-clone$n.log)"
-    git -C "$d" diff > "$OUT/B-clone$n.patch"
+    mvn_in "$n" "B$RTAG-clone$n" "mvn -B $PLUGIN:run -Drewrite.configLocation=/lab/rewrite.yml \
+      -Drewrite.activeRecipes=$RECIPE -Drewrite.recipeArtifactCoordinates=$RECIPE_JARS" || die "recipe failed (logs/B$RTAG-clone$n.log)"
+    git -C "$d" diff > "$OUT/B$RTAG-clone$n.patch"
     git -C "$d" diff --stat | tail -1
-    git -C "$d" switch -q -C side-b && git -C "$d" add -A ':!**/target/**' \
+    git -C "$d" switch -q -C "side-b$RTAG" && git -C "$d" add -A ':!**/target/**' \
       && git -C "$d" -c user.name=lab8 -c user.email=lab8@localhost commit -qm "Side B: $RECIPE"
     git -C "$d" clean -ffdxq
   done
-  (cd "$OUT" && sha256sum B-clone*.patch | tee B-sha256.txt)
-  [ "$(awk '{print $1}' "$OUT/B-sha256.txt" | sort -u | wc -l)" = 1 ] && echo "all Side B patches identical" || echo "Side B patches DIFFER"
+  (cd "$OUT" && sha256sum B$RTAG-clone*.patch | tee "B$RTAG-sha256.txt")
+  [ "$(awk '{print $1}' "$OUT/B$RTAG-sha256.txt" | sort -u | wc -l)" = 1 ] && echo "all Side B patches identical" || echo "Side B patches DIFFER"
   step "Side B result: verify + probes (clone1)"
-  git -C "$(clone_dir 1)" switch -q side-b; check 1 B-clone1; clean_baseline 1
+  git -C "$(clone_dir 1)" switch -q "side-b$RTAG"; check 1 "B$RTAG-clone1"; clean_baseline 1
 }
 
 cmd_agent() {
