@@ -34,14 +34,14 @@ valid_n() { for n in "$@"; do [[ "$n" =~ ^[1-5]$ ]] || die "clone number must be
 
 # Images: built on first use, labelled so uninstall finds them.
 need_cli()   { docker image inspect moderne-lab-cli >/dev/null 2>&1 \
-                 || docker build --label "$LABEL" -t moderne-lab-cli "$HERE/../cli"; }
+                 || docker build --build-arg LAB_UID="$(id -u)" --build-arg LAB_GID="$(id -g)" --label "$LABEL" -t moderne-lab-cli "$HERE/../cli"; }
 need_agent() { docker image inspect moderne-lab-agent >/dev/null 2>&1 \
-                 || docker build --label "$LABEL" -t moderne-lab-agent -f "$HERE/Dockerfile.agent" "$HERE"; }
+                 || docker build --build-arg LAB_UID="$(id -u)" --build-arg LAB_GID="$(id -g)" --label "$LABEL" -t moderne-lab-agent -f "$HERE/Dockerfile.agent" "$HERE"; }
 
 # run_mod <clone dir name> <log> <commands>: Moderne CLI container, Lab 2 volume (recipes, caches).
 run_mod() {
   need_cli
-  docker run --rm --cpus 1.5 --label "$LABEL" -u 1001:1001 \
+  docker run --rm --cpus 1.5 --label "$LABEL" -u "$(id -u):$(id -g)" \
     -v "$WS":/ws -v "$HERE":/lab:ro -v moderne-lab-home:/home/lab \
     -w "/ws/$1" moderne-lab-cli bash -c "set -euxo pipefail; $3" > "$OUT/logs/$2.log" 2>&1 \
     || { echo "FAILED: see $OUT/logs/$2.log"; tail -25 "$OUT/logs/$2.log"; return 1; }

@@ -15,7 +15,7 @@ Results below are from **2026-10-28 on Moderne CLI 4.12.0**, `rewrite-migrate-ja
 ## The whole thing in one command
 
 ```bash
-~/projects/general_chat/moderne.ai/lab/cli/demo.sh
+~/moderne-lab/lab/cli/demo.sh
 ```
 
 It stops at the first failure and prints the log tail. Full logs, patches and clones go to `lab/cli/ws/demo/`.

@@ -4,8 +4,9 @@
 # CLI, recipe JARs, and Maven/Gradle caches persist in the `moderne-lab-home` volume.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-docker image inspect moderne-lab-cli >/dev/null 2>&1 || docker build -t moderne-lab-cli "$HERE"
+docker image inspect moderne-lab-cli >/dev/null 2>&1 || docker build --build-arg LAB_UID="$(id -u)" --build-arg LAB_GID="$(id -g)" -t moderne-lab-cli "$HERE"
 mkdir -p "$HERE/ws"
-exec docker run --rm -it -u 1001:1001 \
+"$HERE/seed-demo.sh"
+exec docker run --rm -it -u "$(id -u):$(id -g)" \
   -v "$HERE":/lab:ro -v "$HERE/ws":/ws -v moderne-lab-home:/home/lab \
   -w /ws moderne-lab-cli bash

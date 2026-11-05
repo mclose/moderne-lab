@@ -10,7 +10,7 @@ REPO=https://github.com/spring-petclinic/spring-petclinic-microservices
 R21=org.openrewrite.java.migrate.UpgradeToJava21
 PIN=org.openrewrite.github.security.UnpinnedActions
 mod_in() {  # mod_in <dir under /ws/demo> <log name> <shell commands>
-  docker run --rm --cpus 1.5 -u 1001:1001 -v "$HERE/ws":/ws -v moderne-lab-home:/home/lab \
+  docker run --rm --cpus 1.5 -u "$(id -u):$(id -g)" -v "$HERE/ws":/ws -v moderne-lab-home:/home/lab \
     -w "/ws/demo/$1" moderne-lab-cli bash -c "set -euxo pipefail; $3" > "$DEMO/logs/$2.log" 2>&1 \
     || { echo "FAILED: see $DEMO/logs/$2.log"; tail -20 "$DEMO/logs/$2.log"; exit 1; }
   grep -E 'MOD SUCCEEDED|✓ Maven|saved by|Produced results|MVNW_EXIT' "$DEMO/logs/$2.log" | grep -vE '^\s+0% ' || true
@@ -24,7 +24,7 @@ case "${1:-}" in
   *)     sed -n 2,5p "$0"; exit 1 ;;
 esac
 [ -e "$DEMO" ] && { echo "$DEMO exists; run ./demo.sh reset first"; exit 1; }
-docker image inspect moderne-lab-cli >/dev/null 2>&1 || docker build -t moderne-lab-cli "$HERE"
+docker image inspect moderne-lab-cli >/dev/null 2>&1 || docker build --build-arg LAB_UID="$(id -u)" --build-arg LAB_GID="$(id -g)" -t moderne-lab-cli "$HERE"
 mkdir -p "$DEMO/logs"
 
 for r in run1 run2; do

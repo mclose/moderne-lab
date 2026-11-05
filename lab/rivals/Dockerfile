@@ -13,8 +13,11 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o 
  && apt-get update && apt-get install -y --no-install-recommends gh maven unzip less jq \
  && rm -rf /var/lib/apt/lists/*
 ENV JAVA_HOME=/usr/lib/jvm/temurin-21 PATH="/usr/lib/jvm/temurin-21/bin:/home/node/.local/bin:${PATH}"
-# uid 1000 is the image's `node` user; we run as 1001 (mclose) at runtime, so give it a real home.
-RUN useradd -m -u 1001 -s /bin/bash lab
+# The scripts build with your uid/gid (LAB_UID/LAB_GID) and run as you, so give that uid a real home.
+# -o: the node base image already has uid 1000 (`node`).
+ARG LAB_UID=1000
+ARG LAB_GID=1000
+RUN groupadd -o -g "$LAB_GID" lab && useradd -m -o -u "$LAB_UID" -g lab -s /bin/bash lab
 USER lab
 WORKDIR /home/lab
 ENV PATH="/home/lab/.local/bin:/home/lab/bin:${PATH}"

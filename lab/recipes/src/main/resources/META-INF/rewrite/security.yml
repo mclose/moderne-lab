@@ -1,0 +1,12 @@
+---
+type: specs.openrewrite.org/v1beta/recipe
+name: lab.security.JettyCve202619204
+displayName: Remediate CVE-2026-19204 (Jetty WebSocket reserved-opcode OOM)
+description: >-
+  Upgrade Jetty 12.1 WebSocket core to the latest patch release (fixed in 12.1.12).
+  Found by Claude Mythos Preview (Project Glasswing). Not in the scanner's advisory data yet.
+recipeList:
+  - org.openrewrite.java.dependencies.UpgradeDependencyVersion:
+      groupId: org.eclipse.jetty.websocket
+      artifactId: "*websocket-core-common"
+      newVersion: 12.1.x

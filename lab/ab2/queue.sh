@@ -1,5 +1,5 @@
 #!/bin/bash
-# Everything after the first Lab 8 pass, in order, one container at a time (claude has 2 cores).
+# Everything after the first Lab 8 pass, in order, one container at a time (a 2-core host can only take one).
 # Lab 8 and 8b share one credit budget (BUDGET in ab.sh / ab2.sh). Logs: ab2/results/logs/queue.log
 set -u
 LAB="$(cd "$(dirname "$0")/.." && pwd)"

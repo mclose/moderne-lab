@@ -21,7 +21,7 @@ This lab has its own folder, `lab/own/`, so Lab 2 stays untouched. The launcher 
 the CLI home volume with Lab 2 and **caps the container at 1.5 CPUs**: LST builds peg every core you give them.
 
 ```bash
-cd ~/projects/general_chat/moderne.ai/lab/own
+cd ~/moderne-lab/lab/own
 ```
 
 ```bash

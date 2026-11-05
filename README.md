@@ -6,8 +6,8 @@ You set the pace. Each part ends with a checkpoint; stop whenever you've got wha
 | # | Part | Type | Needs |
 |---|------|------|-------|
 | 1 | [The pitch](01-the-pitch.md) | read | nothing |
-| 2 | [Lab 1: OpenRewrite on one repo](02-lab1-openrewrite.md) | hands-on, terminal | Docker on `claude` |
-| 3 | [Lab 2: Moderne CLI across many repos](03-lab2-moderne-cli.md) | hands-on, terminal | Docker on `claude` |
+| 2 | [Lab 1: OpenRewrite on one repo](02-lab1-openrewrite.md) | hands-on, terminal | Docker |
+| 3 | [Lab 2: Moderne CLI across many repos](03-lab2-moderne-cli.md) | hands-on, terminal | Docker |
 | 4 | [Lab 3: the Platform in a browser](04-lab3-platform.md) | hands-on, browser (optional) | GitHub login |
 | 5 | [Lab 4: Security view: AI-found CVEs](05-lab4-security.md) | read + hands-on | Docker |
 | 6 | [Lab 5: AI-assisted recipe authoring](06-lab5-recipe-authoring.md) | hands-on with Claude Code | Docker, Claude Code (5.4: app.moderne.io login) |
@@ -20,6 +20,29 @@ If you're short on time: Part 1 + Lab 1 gets you the core idea. Lab 2 shows the 
 Lab 3 is optional; it shows the paid UI and needs you to grant GitHub permissions.
 Labs 4–6 were added on day 2: security, recipe authoring, competitors. Lab 7 (your own repos, Python vs. Java) on 2026-10-28.
 Lab 8 (agent drift vs. a recipe, with an exploitable toy app in 8b) on 2026-10-30.
+
+## Before you start
+
+```bash
+git clone https://github.com/mclose/moderne-lab.git ~/moderne-lab
+cd ~/moderne-lab
+```
+
+The docs assume the repo is at `~/moderne-lab`. Clone it somewhere else and adjust the `cd` lines.
+
+- **Host:** Linux or macOS with Docker. Everything runs in containers: no Java, Maven or Moderne CLI on the host.
+  The images are about 9 GB. I built and ran it all on a 2-core VM; the scripts cap containers at 1.5 CPUs, so
+  run heavy steps one at a time.
+- **Accounts:** none for Labs 1, 2, 4 and 7 or the demo. Lab 3 needs a GitHub login to app.moderne.io. Lab 5 uses
+  Claude Code. Lab 6 needs a GitHub Copilot plan (AWS credentials optional, billed). Lab 8 needs a Copilot plan and a
+  fine-grained GitHub token with only the *Copilot Requests* permission, saved to `~/.config/moderne-lab/copilot.token`
+  (mode 600). My full Lab 8 and 8b runs used about 920 AI credits; one model's five runs is far less.
+- **Results are dated.** Every result here was verified on the date it gives, with the versions it names. The CLI,
+  the recipes and the models all move; expect your numbers to drift.
+
+> **Warning: Lab 8b's ledger app (`lab/ab2/ledger`) is vulnerable on purpose.** It has XXE, Zip Slip, SQL injection and
+> Text4Shell holes so the probe has something to exploit. Run it only through `ab2.sh`, which starts it with
+> `--network none`. Never deploy it or expose its port. Dependency scanners will flag this repo; that's expected.
 
 ## The arc
 
@@ -53,24 +76,28 @@ Lab 8 (agent drift vs. a recipe, with an exploitable toy app in 8b) on 2026-10-3
 ## What's on disk
 
 ```
-moderne.ai/
-├── README.md, 01..08-*.md     the course
+moderne-lab/
+├── README.md, 01..10-*.md     the course
+├── LICENSE                    MIT
 └── lab/
     ├── lab1.sh                Lab 1 driver (Maven + OpenRewrite in Docker)
-    ├── spring-petclinic/      Lab 1 target repo (reset with ./lab1.sh reset)
-    ├── .m2/                   warm Maven cache (safe to delete; ~slow first run again)
+    ├── spring-petclinic/      Lab 1 target repo, cloned on first run (reset with ./lab1.sh reset)
+    ├── .m2/                   Maven cache the labs fill (safe to delete; the next run is slower)
     ├── cli/
         ├── Dockerfile         image `moderne-lab-cli`: Moderne CLI + JDK 8/11/17/21
         ├── repos.csv          the three Lab 2 repos
         ├── lab2.sh            opens a shell in the CLI container
         ├── lab2-smoke.sh      non-interactive replay of Lab 2 (how I verified it)
         ├── demo.sh            the slide demo, end to end (./demo.sh reset clears ws/demo)
+        ├── seed/ai-found-cves/  source of the Lab 4 demo repo
+        ├── seed-demo.sh       creates ws/local/ai-found-cves from seed/ (lab2.sh and lab4.sh call it)
         └── ws/                Lab 2 workspace (mounted at /ws in the container)
             ├── local/ai-found-cves/   Lab 4 demo repo (pins AI-found CVE versions)
             └── demo/                  slide demo output: clones, run1/run2.patch, logs/
     ├── lab4.sh                Lab 4 driver: scan / fix / jetty / reset
-    ├── recipes/               Lab 5 recipe project (git; branch reference-solution = answer)
-    ├── recipe-starter/        Moderne's official starter, for reading (needs a Code Genome token to build)
+    ├── recipes/               Lab 5 recipe project
+    ├── recipes-solution/      one worked answer for Lab 5.2 (don't peek)
+    ├── recipe-starter/        Moderne's official starter, if you clone it to read (needs a Code Genome token to build)
     └── rivals/
         ├── Dockerfile         image `moderne-lab-rivals`: modernize + atx + gh + JDKs
         ├── lab6.sh            opens a shell in it
@@ -91,7 +118,7 @@ Nothing is installed on the host; the CLI's home (recipes, Maven/Gradle caches) 
 Every lab container is labelled `course=moderne-lab`. Cleanup when done, which lists everything before it deletes anything:
 
 ```bash
-~/projects/general_chat/moderne.ai/lab/uninstall.sh --dry-run
+~/moderne-lab/lab/uninstall.sh --dry-run
 ```
 
 `--all` also removes the cloned target repos and the results. Tools you already had (Docker, Maven, VS Code) are never touched.
@@ -102,7 +129,7 @@ docker image rm moderne-lab-own moderne-lab-cli moderne-lab-rivals maven:3.9-ecl
 ```
 
 ```bash
-rm -rf ~/projects/general_chat/moderne.ai/lab
+rm -rf ~/moderne-lab
 ```
 
 Re-verified 2026-10-27 (images rebuilt after a disk cleanup): Moderne CLI 4.11.1, `modernize` 1.0.77, `atx` 3.20.1.
@@ -112,3 +139,9 @@ Disk: the four images are about 9 GB; rebuilding also leaves build cache, which 
 Researched and built 2026-10-08 against Moderne CLI 4.9.1, rewrite-maven-plugin 6.46.1,
 rewrite-spring 6.37.1. This product moves fast. If a command fails, check
 [docs.moderne.io](https://docs.moderne.io/) first.
+
+## License
+
+MIT, see [LICENSE](LICENSE). The ledger app's Maven wrapper is Apache-2.0. Moderne's `create-recipe` skill
+for Lab 5 isn't included; `lab/recipes/get-skill.sh` copies it from your own Moderne CLI install. Moderne, OpenRewrite, GitHub Copilot and
+AWS Transform are their owners' trademarks; this course isn't affiliated with any of them.

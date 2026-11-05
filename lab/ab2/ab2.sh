@@ -56,7 +56,7 @@ clone_dir() { echo "$WS/clone$1"; }
 pick() { [ $# -gt 0 ] && echo "$@" || echo "${CLONES[@]}"; }
 valid_n() { for n in "$@"; do [[ "$n" =~ ^[1-5]$ ]] || die "clone number must be 1-5, got '$n'"; done; }
 need_agent() { docker image inspect moderne-lab-agent >/dev/null 2>&1 \
-                 || docker build --label "$LABEL" -t moderne-lab-agent -f "$HERE/../ab/Dockerfile.agent" "$HERE/../ab"; }
+                 || docker build --build-arg LAB_UID="$(id -u)" --build-arg LAB_GID="$(id -g)" --label "$LABEL" -t moderne-lab-agent -f "$HERE/../ab/Dockerfile.agent" "$HERE/../ab"; }
 mvn_in() {  # mvn_in <clone n> <log> <commands>: dev container with network (Maven Central) and the shared cache
   need_agent
   docker run --rm --cpus 1.5 --label "$LABEL" -v "$WS":/ws -v "$HERE":/lab:ro -v moderne-lab-ab-m2:/home/lab/.m2 \

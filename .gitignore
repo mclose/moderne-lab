@@ -12,7 +12,6 @@ lab/*/ws/
 # Upstream clones and the recipe project, each its own git repo
 lab/spring-petclinic/
 lab/recipe-starter/
-lab/recipes/
 
 # A/B raw output: model transcripts and logs are large and regenerable.
 # Patches, costs, verify, timing and session summaries stay tracked.
@@ -24,3 +23,6 @@ lab/ab*/results/*.log
 # ...except the credit ledger the doc's totals come from
 !lab/ab*/results/spend.log
 lab/ab*/results/*.stderr
+
+# Moderne's create-recipe skill: not redistributed; lab/recipes/get-skill.sh copies it from your CLI install
+lab/recipes/.claude/skills/

@@ -46,7 +46,7 @@ build still passes."
 **Recipe:** `lab.FixLog4Shell` in `lab/ab/rewrite.yml`, one `UpgradeDependencyVersion` to 2.26.1 (the newest 2.x).
 
 ```bash
-cd ~/projects/general_chat/moderne.ai/lab/ab
+cd ~/moderne-lab/lab/ab
 ./ab.sh reset --dry-run       # what a reset would delete
 ./ab.sh setup && ./ab.sh baseline
 ./ab.sh recipe && ./ab.sh apply && ./ab.sh regress
@@ -114,6 +114,9 @@ That mismatch is why "drop the version" works: the BOM pulls core up to 2.25.3 t
 Lab 8 has one right answer and a build that can't tell the fixes apart. Real work is messier: a scanner report,
 several findings, code written by different teams, and holes the scanner doesn't list. Lab 8b recreates that.
 
+> **The ledger is vulnerable on purpose.** Run it only through `ab2.sh` (it starts the jar with `--network none`);
+> never deploy it or expose its port.
+
 **Target:** `lab/ab2/ledger/`, a small back-office ledger written for this lab: Spring Boot 4, Java 17, five Maven
 modules, about 900 lines, written in three team styles (legacy, modern records-and-`var`, and copy-paste). No model
 can have seen it before. It has **seven exploitable holes**. The scanner ticket names five findings, and three of the
@@ -146,7 +149,7 @@ nothing else can be probed. Before trusting the probe, I checked that it gives b
 VULNERABLE on all seven, and a partly fixed build was SAFE exactly where its code was fixed.
 
 ```bash
-cd ~/projects/general_chat/moderne.ai/lab/ab2
+cd ~/moderne-lab/lab/ab2
 ./ab2.sh reset --dry-run
 ./ab2.sh setup && ./ab2.sh baseline
 ./ab2.sh recipe
@@ -354,7 +357,7 @@ CSVs, and each tab opens with a plain-words "What happened, in order" summary.
 ## Cleanup
 
 ```bash
-~/projects/general_chat/moderne.ai/lab/uninstall.sh --dry-run
+~/moderne-lab/lab/uninstall.sh --dry-run
 ```
 
 It lists the lab's containers, images, volumes and work folders, and removes only what the lab created. Then revoke

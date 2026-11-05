@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Lab 4 demo: a tiny service that pins libraries with 2026 CVEs found by (or with) AI. -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>lab</groupId>
+  <artifactId>ai-found-cves</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+  <dependencies>
+    <!-- CVE-2026-19204: found by Claude Mythos Preview (Project Glasswing). Fixed 12.1.12. -->
+    <dependency>
+      <groupId>org.eclipse.jetty.websocket</groupId>
+      <artifactId>jetty-websocket-core-common</artifactId>
+      <version>12.1.11</version>
+    </dependency>
+    <!-- Same CVE, Jetty 11 line, where the artifact name matches the advisory. Fixed 11.0.32 (11.x past .26 is commercial-only; Central stops at 11.0.26). -->
+    <dependency>
+      <groupId>org.eclipse.jetty.websocket</groupId>
+      <artifactId>websocket-core-common</artifactId>
+      <version>11.0.26</version>
+    </dependency>
+    <!-- CVE-2026-34197: ActiveMQ Jolokia RCE, CISA KEV. Researcher called the find "80% Claude". Fixed 6.2.3. -->
+    <dependency>
+      <groupId>org.apache.activemq</groupId>
+      <artifactId>activemq-broker</artifactId>
+      <version>6.2.2</version>
+    </dependency>
+    <!-- CVE-2026-28208: junrar path traversal. Human-credited; Mythos independently rediscovered it. Fixed 7.5.8. -->
+    <dependency>
+      <groupId>com.github.junrar</groupId>
+      <artifactId>junrar</artifactId>
+      <version>7.5.7</version>
+    </dependency>
+  </dependencies>
+</project>

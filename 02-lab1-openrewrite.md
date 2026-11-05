@@ -5,13 +5,12 @@
 This is the free, open-source engine that everything Moderne sells is built on.
 
 **Needs:** Docker (that's all; Java runs in a `maven:3.9-eclipse-temurin-17` container).
-I already ran this whole lab once on `claude`, so the Maven cache in `lab/.m2` is warm.
-The first dry run took ~4 min cold; it should be about 1 min now.
+The first dry run takes ~4 min while Maven fills `lab/.m2`; later runs take about 1 min.
 
 All commands run from `lab/`:
 
 ```bash
-cd ~/projects/general_chat/moderne.ai/lab
+cd ~/moderne-lab/lab
 ```
 
 ## Step 1: Look at the "before"

@@ -56,7 +56,7 @@ The demo repo `lab/cli/ws/local/ai-found-cves` is a tiny Maven project I made th
 vulnerable versions of all three libraries (plus Jetty 11, the same CVE on an older line):
 
 ```bash
-cat ~/projects/general_chat/moderne.ai/lab/cli/ws/local/ai-found-cves/pom.xml
+cat ~/moderne-lab/lab/cli/ws/local/ai-found-cves/pom.xml
 ```
 
 **First, the paywall (optional, 1 min).** In the Lab 2 container (`lab/cli/lab2.sh`), try:
@@ -72,7 +72,7 @@ The build works, but the run refuses: the CLI checks whether the repo is public.
 is the product.** So we use the free OpenRewrite Maven plugin instead (same recipe, one repo):
 
 ```bash
-cd ~/projects/general_chat/moderne.ai/lab
+cd ~/moderne-lab/lab
 ```
 
 ```bash
@@ -144,7 +144,7 @@ Dependency bumps are the easy half. Can it fix *your* vulnerable code? Use JavaV
 so the CLI is fine). In the Lab 2 container:
 
 ```bash
-~/projects/general_chat/moderne.ai/lab/cli/lab2.sh
+~/moderne-lab/lab/cli/lab2.sh
 ```
 
 Inside:

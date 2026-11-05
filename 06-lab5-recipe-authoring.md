@@ -12,11 +12,11 @@ The project is `lab/recipes/`, a small Maven recipe library I set up and tested:
 |---|---|
 | The Jetty CVE-2026-19204 recipe from Lab 4 (declarative YAML) | `src/main/resources/META-INF/rewrite/security.yml` |
 | Its tests | `src/test/java/lab/security/JettyCve202619204Test.java` |
-| Moderne's `create-recipe` skill for Claude Code (from CLI 4.9.1, I read it: patterns and examples, nothing executable) | `.claude/skills/create-recipe/SKILL.md` |
+| Moderne's `create-recipe` skill for Claude Code (from CLI 4.9.1, I read it: patterns and examples, nothing executable). It's Moderne's, so it isn't in this repo: `./get-skill.sh` copies it from your Lab 2 CLI install | `.claude/skills/create-recipe/SKILL.md` |
 | House rules for Claude: Docker builds, pinned versions | `CLAUDE.md` |
 | Build/test in Docker (JDK 21) | `./mvn.sh test`, `./mvn.sh install` |
 | Run a recipe on the Lab 4 demo repo | `./run-on-demo.sh dryRun <recipe>` |
-| One worked answer for 5.2 (don't peek) | branch `reference-solution` |
+| One worked answer for 5.2 (don't peek) | `lab/recipes-solution/` |
 
 > **Why not Moderne's official `rewrite-recipe-starter`?** I cloned it (`lab/recipe-starter/`, worth
 > reading). It won't build without a Code Genome Project token: OpenRewrite releases after Aug 2026
@@ -27,7 +27,7 @@ The project is `lab/recipes/`, a small Maven recipe library I set up and tested:
 ## 5.1 Anatomy of a recipe (look, then run)
 
 ```bash
-cd ~/projects/general_chat/moderne.ai/lab/recipes
+cd ~/moderne-lab/lab/recipes
 ```
 
 ```bash
@@ -59,7 +59,7 @@ Open a **new** terminal (or tmux pane) and start Claude Code *in the recipe proj
 `CLAUDE.md` and the Moderne skill:
 
 ```bash
-cd ~/projects/general_chat/moderne.ai/lab/recipes && claude
+cd ~/moderne-lab/lab/recipes && claude
 ```
 
 Paste this prompt:
@@ -91,7 +91,7 @@ markers become the search-results UI and data tables across every repo.
 Compare with my answer:
 
 ```bash
-git diff main reference-solution -- src/
+diff -ru src ../recipes-solution/src
 ```
 
 ## 5.3 Stretch: compose a "security baseline" (5 min)

@@ -26,7 +26,7 @@ them yourself if you want to watch it (Step 2).
 ## Step 0: Get into the container
 
 ```bash
-~/projects/general_chat/moderne.ai/lab/cli/lab2.sh
+~/moderne-lab/lab/cli/lab2.sh
 ```
 
 You're now `lab@...:/ws` with the `mod` CLI on the PATH. Everything below runs **inside the container**.

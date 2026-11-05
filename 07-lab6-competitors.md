@@ -23,7 +23,7 @@ Everything runs in the `moderne-lab-rivals` image (already built): `modernize`, 
 JDK 8/17/21, Maven. Three identical copies of petclinic at commit `1db99db` are in `lab/rivals/ws/`:
 
 ```bash
-cd ~/projects/general_chat/moderne.ai/lab/rivals
+cd ~/moderne-lab/lab/rivals
 ```
 
 ```bash
@@ -32,14 +32,14 @@ cd ~/projects/general_chat/moderne.ai/lab/rivals
 
 `aws` and `copilot` should read `boot=2.7.0 java=1.8 javax-imports-left=47`; `openrewrite` is the Lab 1 result.
 
-**AWS credentials (only if you're doing AWS).** There's no `~/.aws` on `claude`. Simplest is short-lived
-credentials from galena. On **galena**, with a profile that has the `AWSTransformCustomFullAccess` policy:
+**AWS credentials (only if you're doing AWS).** Nothing is mounted from `~/.aws`. Simplest is short-lived
+credentials from a machine where the AWS CLI is logged in. There, with a profile that has the `AWSTransformCustomFullAccess` policy:
 
 ```bash
 aws configure export-credentials --profile YOUR_PROFILE --format env
 ```
 
-Paste the three `export AWS_...` lines into your shell on **claude**, plus:
+Paste the three `export AWS_...` lines into the shell where you will run `lab6.sh`, plus:
 
 ```bash
 export AWS_REGION=us-east-1
@@ -59,7 +59,7 @@ Start the sandbox:
 gh auth login
 ```
 
-Choose GitHub.com → HTTPS → "Login with a web browser", and open the device URL on galena.
+Choose GitHub.com → HTTPS → "Login with a web browser", and open the device URL in any browser.
 
 ## 6.2 Microsoft: `modernize` (~10–20 min, mostly waiting)
 
