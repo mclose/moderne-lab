@@ -70,14 +70,14 @@
     <dependency>
       <groupId>org.assertj</groupId>
       <artifactId>assertj-core</artifactId>
-      <version>3.27.6</version>
+      <version>3.27.7</version>
       <scope>test</scope>
     </dependency>
     <!-- On the test classpath so recipe tests can type-attribute code that calls junrar. -->
     <dependency>
       <groupId>com.github.junrar</groupId>
       <artifactId>junrar</artifactId>
-      <version>7.5.10</version>
+      <version>7.6.1</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
