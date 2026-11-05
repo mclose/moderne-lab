@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent drift board</title>
+<style>
+  :root {
+    --font-anthropic-sans: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --font-anthropic-serif: Georgia, "Times New Roman", serif;
+    --color-fg: #1f1e2b; --color-fg-muted: #5f5d70; --color-panel: #ffffff; --color-border-line: #dedce8;
+    --color-ok: #2e8b57; --color-bad: #c8323c;
+    --cds-chart-muted: #b9b7c6; --cds-chart-status-critical: #c8323c;
+    --cds-text-secondary: #5f5d70; --cds-surface-popover: #ffffff; --cds-shadow-popover: 0 4px 16px rgba(0,0,0,.15);
+    --cds-border: 1px solid #dedce8; --cds-radius: 10px; --cds-dur-slow: .3s; --cds-font-weight-medium: 500;
+    --cds-font-size-caption: .8rem; --cds-font-size-heading: 1.15rem; --cds-font-size-title: 1.9rem;
+    --cds-gap-xs: .25rem; --cds-gap-sm: .5rem; --cds-gap-md: .9rem; --cds-gap-lg: 1.4rem; --cds-gap-xl: 2rem;
+    --cds-pad-xs: .25rem; --cds-pad-sm: .5rem; --cds-pad-md: .75rem; --cds-pad-lg: 1.1rem;
+  }
+  body { background: #f6f5fa; color: var(--color-fg); margin: 0; padding: 24px 16px 48px; }
+  .pub-note { max-width: 82rem; margin: 0 auto 16px; font: .85rem var(--font-anthropic-sans); color: var(--color-fg-muted); }
+  .pub-note a { color: inherit; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+// Stand-in for the dashboard runtime: just enough of `dash` for this page.
+window.dash = (() => {
+  const SOURCES = {'lab8': 'lab8-runs.csv', 'lab8b': 'lab8b-runs.csv', 'lab8bstart': 'lab8b-start-runs.csv', 'lab8bnamed': 'lab8b-named-runs.csv', 'lab8blookpast': 'lab8b-lookpast-runs.csv'};
+  const raw = {}, calcs = {}, draws = [];
+  let ready = false;
+  const data = (id) => {
+    if (!ready) return { status: 'loading', data: [] };
+    if (id in raw) return { status: 'ok', data: raw[id] };
+    const c = calcs[id];
+    if (!c) return { status: 'error', data: [] };
+    if (!c.cache) c.cache = c.fn(...c.inputs.map((i) => data(i).data));
+    return { status: 'ok', data: c.cache };
+  };
+  const run = ([name, fn]) => document.querySelectorAll(`[data-draw="${name}"]`).forEach((el) => fn(el));
+  const api = {
+    colors: ['#5b3fd1', '#e0457b', '#1f9e89', '#f2a541', '#3d7dd8', '#8c6bb1', '#6b8e23', '#a0522d'],
+    calc: (id, spec) => { calcs[id] = { fn: spec.fn, inputs: spec.inputs }; },
+    data,
+    draw: (name, fn) => { draws.push([name, fn]); if (ready) run([name, fn]); },
+    setLink: (id) => { history.replaceState(null, '', '#' + id); draws.forEach(run); },
+  };
+  Promise.all(Object.entries(SOURCES).map(([id, f]) => d3.csv(f).then((rows) => { raw[id] = rows; })))
+    .then(() => { ready = true; draws.forEach(run); })
+    .catch((e) => { console.error(e); document.body.insertAdjacentHTML('afterbegin', '<p class="pub-note">Could not load the run data.</p>'); });
+  let t; addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => draws.forEach(run), 200); });
+  return api;
+})();
+</script>
+</head>
+<body>
+<p class="pub-note">Lab 8 and 8b results from <a href="https://github.com/mclose/moderne-lab">github.com/mclose/moderne-lab</a>.
+Data: the run CSVs in this folder, built by make_board_data.py. Generated from index.html by make_public.py.</p>
+<meta name="dash-one-writer">
+<style>
+  .db { display: grid; gap: var(--cds-gap-xl); font-family: var(--font-anthropic-sans); max-width: 82rem; margin-inline: auto; }
+  .db-head { display: grid; gap: var(--cds-gap-sm); }
+  .db-title { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+  .db-sub { color: var(--color-fg-muted); margin: 0; max-width: 70ch; }
+  .db-tabs { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs); border-bottom: 1px solid var(--color-border-line); }
+  .db-tab { font: inherit; background: none; border: 0; border-bottom: 2px solid transparent; padding: var(--cds-pad-sm) var(--cds-pad-md); color: var(--color-fg-muted); cursor: pointer; }
+  .db-tab[aria-selected="true"] { color: var(--color-fg); border-bottom-color: var(--color-fg); }
+  .db-tab:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+  .db-page { display: grid; gap: var(--cds-gap-lg); }
+  .db-lede { font-size: var(--cds-font-size-heading); margin: 0; max-width: 62ch; text-wrap: pretty; }
+  .db-lede b { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: 1.15em; font-variant-numeric: tabular-nums; }
+  .db-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: var(--cds-gap-md); }
+  .db-tile { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-md) var(--cds-pad-lg); display: grid; gap: var(--cds-gap-xs); }
+  .db-tile span { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .db-tile b { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; }
+  .db-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: var(--cds-gap-md); }
+  .db-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: grid; gap: var(--cds-gap-sm); align-content: start; min-width: 0; }
+  .db-card.wide { grid-column: 1 / -1; }
+  .db-card h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; }
+  .db-card p.note { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); margin: 0; max-width: 80ch; }
+  .db-chart { position: relative; min-height: 12rem; min-width: 0; }
+  .db-chart svg { display: block; overflow: visible; }
+  .db-chart text { fill: var(--color-fg); font-family: var(--font-anthropic-sans); }
+  .db-chart .muted { fill: var(--color-fg-muted); }
+  .db-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); max-width: 18rem; z-index: 2; }
+  .db-tip .k { color: var(--cds-text-secondary); }
+  .db-legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs) var(--cds-gap-md); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .db-legend i { display: inline-block; width: .75rem; height: .75rem; border-radius: 2px; margin-right: .35rem; vertical-align: -1px; }
+  .db-scroll { max-height: 28rem; overflow: auto; min-width: 0; }
+  .db-table { border-collapse: collapse; width: 100%; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+  .db-table th, .db-table td { text-align: left; padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); white-space: nowrap; }
+  .db-table th { position: sticky; top: 0; background: var(--color-panel); font-weight: var(--cds-font-weight-medium); }
+  .db-table td.n, .db-table th.n { text-align: right; }
+  .db-notes { display: grid; gap: var(--cds-gap-sm); max-width: 75ch; margin: 0; padding-left: 1.1rem; }
+  .db-notes li { color: var(--color-fg-muted); }
+  .db-story { display: grid; gap: var(--cds-gap-sm); max-width: 78ch; margin: 0; padding-left: 1.3rem; }
+  .db-story li { padding-left: .2rem; }
+  .db-story b { font-weight: var(--cds-font-weight-medium); }
+  .db-story .see { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .db-verdict { margin: 0; max-width: 78ch; padding-top: var(--cds-pad-sm); border-top: 1px solid var(--color-border-line); }
+  .db-notes code, .db-card code { font-size: .92em; }
+  [data-dash-source-state=empty] { color: transparent; }
+  [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+  .db-fail { display: flex; align-items: center; justify-content: center; gap: .5rem; min-height: inherit; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .db-fail::before { content: ""; width: .375rem; height: .375rem; border-radius: 50%; background: var(--color-bad); }
+</style>
+
+<div class="db">
+  <header class="db-head">
+    <h1 class="db-title">Agent drift board</h1>
+    <p class="db-sub">The same security fix asked of Copilot coding agents again and again, next to one OpenRewrite recipe. Every run started from the same commit in a fresh session with the same prompt. Runs were made on 2026-10-30 with the Copilot CLI 1.0.105.</p>
+  </header>
+
+  <nav class="db-tabs" role="tablist" aria-label="Labs">
+    <button class="db-tab" role="tab" id="tab-log4shell" aria-controls="log4shell" aria-selected="true">Lab 8 · Log4Shell</button>
+    <button class="db-tab" role="tab" id="tab-ledger" aria-controls="ledger" aria-selected="false">Lab 8b · Scanner ticket</button>
+    <button class="db-tab" role="tab" id="tab-method" aria-controls="method" aria-selected="false">How this was run</button>
+  </nav>
+
+  <section class="db-page" id="log4shell" role="tabpanel" aria-labelledby="tab-log4shell">
+    <p class="db-lede">Over <b data-draw="l8-agent-runs" data-source="l8_summary" data-field="agent_runs">—</b> agent runs on <b data-draw="l8-models" data-source="l8_summary" data-field="models">—</b> models, the agents wrote <b data-draw="l8-fixes" data-source="l8_summary" data-field="agent_fixes">—</b> different fixes for one planted <code>log4j-core 2.14.1</code>. The recipe wrote <b data-draw="l8-recipe-fixes" data-source="l8_summary" data-field="recipe_fixes">—</b> fix, the same bytes all five times.</p>
+
+    <article class="db-card wide" id="l8-story">
+      <h2>What happened, in order</h2>
+      <ol class="db-story">
+        <li><b>Every run fixed Log4Shell.</b> All 40 agent builds and the recipe's build passed, and every log4j-core version they resolve to is past the Log4Shell fixes.</li>
+        <li><b>The recipe wrote one fix, the same bytes five times:</b> bump to 2.26.1. Run again on its own result, it found nothing left to change. This is the canary: a well-known CVE with a one-line fix, and the recipe fixed it.</li>
+        <li><b>The agents wrote six different fixes.</b> Sonnet, Haiku and MAI each repeated one patch exactly. The other five models changed approach between fresh sessions with the same prompt. <span class="see">Chart: “Which fix each run chose”.</span></li>
+        <li><b>The differences matter later, not today.</b> 21 runs deleted the dependency and 10 left the version to Spring Boot. The recipe has nothing to change in those, but nothing stops 2.14.1 coming back either. The 7 runs that pinned 2.17.2 are safe today, and the recipe would still move them to 2.26.1. <span class="see">Table: <i>Recipe still changes</i>.</span></li>
+        <li><b>Cost varied 35× for the same result,</b> from 3 credits for Haiku's five runs to 106.5 for grok's. <span class="see">Chart: “Cost for five runs”.</span></li>
+      </ol>
+      <p class="db-verdict"><b>Bottom line:</b> everyone got this one right. The drift is in how they fixed it, not whether they did. Lab 8b is where that stops being true.</p>
+    </article>
+
+    <div class="db-tiles">
+      <div class="db-tile"><span>Agent runs that passed the build</span><b data-draw="l8-pass" data-source="l8_summary" data-field="agent_pass">—</b></div>
+      <div class="db-tile"><span>Models that gave the same fix 5 of 5 times</span><b data-draw="l8-stable" data-source="l8_summary" data-field="stable_models">—</b></div>
+      <div class="db-tile"><span>Runs that removed log4j-core instead of upgrading it</span><b data-draw="l8-removed" data-source="l8_summary" data-field="removed">—</b></div>
+      <div class="db-tile"><span>AI credits spent on Lab 8</span><b data-draw="l8-credits" data-source="l8_summary" data-field="credits">—</b></div>
+    </div>
+
+    <div class="db-grid">
+      <article class="db-card wide" id="l8-matrix-card">
+        <h2>Which fix each run chose</h2>
+        <p class="note">One square per run. Rows are models, columns are the five fresh sessions. Hover a square for the resolved log4j-core version, cost and time.</p>
+        <div class="db-chart" data-draw="l8-matrix" data-source="lab8"></div>
+        <div class="db-legend" data-draw="l8-legend" data-source="lab8"></div>
+      </article>
+
+      <article class="db-card" id="l8-credits-card">
+        <h2>Cost for five runs, by model</h2>
+        <p class="note">AI credits from each session's own usage report. The end label counts the different fixes in its five runs.</p>
+        <div class="db-chart" data-draw="l8-credits-chart" data-source="l8_by_model"></div>
+      </article>
+
+      <article class="db-card" id="l8-version-card">
+        <h2>log4j-core version the build ends up with</h2>
+        <p class="note">Resolved in customers-service by an OpenRewrite DependencyInsight run on each result. All of these are past the Log4Shell fixes, so every run closed the CVE. They just closed it in different ways.</p>
+        <div class="db-chart" data-draw="l8-version-chart" data-source="l8_versions"></div>
+      </article>
+
+      <article class="db-card wide" id="l8-table-card">
+        <h2>Every run</h2>
+        <p class="note"><i>Recipe still changes</i> is the recipe run on top of the agent's result: 0 means the recipe found nothing left to do.</p>
+        <div class="db-scroll">
+          <table class="db-table" data-source="lab8" data-row-key="run">
+            <thead><tr>
+              <th data-field="run">Run</th><th data-field="model">Model</th><th data-field="fix">Fix</th><th data-field="log4j_core">log4j-core</th>
+              <th data-field="patch">Patch sha256</th><th data-field="build">Build</th><th class="n" data-field="credits">Credits</th><th class="n" data-field="seconds">Seconds</th><th class="n" data-field="recipe_still_changes">Recipe still changes</th>
+            </tr></thead>
+            <tbody data-draw="l8-rows"></tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="db-page" id="ledger" role="tabpanel" aria-labelledby="tab-ledger" hidden>
+    <p class="db-lede">Given a five-finding scanner ticket for a small Spring Boot ledger with seven real holes, <b data-draw="l8b-all-safe" data-source="l8b_summary" data-field="all_safe">—</b> of <b data-draw="l8b-runs" data-source="l8b_summary" data-field="agent_runs">—</b> agent runs closed all seven. <b data-draw="l8b-broke" data-source="l8b_summary" data-field="agent_broken">—</b> passed the build but left an app that won't start. No two agent patches were the same.</p>
+
+    <div class="db-tiles">
+      <div class="db-tile"><span>Different agent patches out of 20</span><b data-draw="l8b-distinct" data-source="l8b_summary" data-field="agent_patches">—</b></div>
+      <div class="db-tile"><span>Agent runs that passed <code>mvnw verify</code></span><b data-draw="l8b-pass" data-source="l8b_summary" data-field="agent_pass">—</b></div>
+      <div class="db-tile"><span>Started runs that still had an unnamed XXE open</span><b data-draw="l8b-xxe" data-source="l8b_summary" data-field="unnamed_xxe_open">—</b></div>
+      <div class="db-tile"><span>AI credits spent on Lab 8b</span><b data-draw="l8b-credits" data-source="l8b_summary" data-field="credits">—</b></div>
+    </div>
+
+    <article class="db-card wide" id="l8b-story">
+      <h2>What happened, in order</h2>
+      <p class="note">40 agent runs (eight models, five each) and the recipe, then three more rounds of 30 on six models, each with a different addition to the prompt.</p>
+      <ol class="db-story">
+        <li><b>Every build passed, agents and recipe alike.</b> <code>./mvnw verify</code> runs the unit tests, but it never starts the app, so it said “done” for every patch.</li>
+        <li><b>Then each app was started and attacked, and 12 of 45 wouldn't start.</b> That was all five recipe runs (one patch, five times), 4 grok runs, 2 Sonnet runs and 1 MAI run. Every one of them had upgraded commons-configuration2 to 2.15.1. Every run that chose 2.12.0 or older, or removed the library, started. <span class="see">Chart: “The upgrade that stops the app”.</span></li>
+        <li><b>A run that won't start can't be probed.</b> In the grid below, those rows have a red <i>Starts</i> cell followed by faded grey cells. Grey doesn't mean the attack failed; it means there was nothing to attack.</li>
+        <li><b>So the recipe as shipped failed.</b> Its patch breaks the app, and in production that's an outage. That's the recipe's red row at the top of the grid.</li>
+        <li><b>The recipe's code changes did work.</b> The next row down is the recipe's code changes with commons-configuration2 left at 2.7, from the harness's first test run, so the app starts. It closed 4 of 7 holes, including the StAX XXE that 31 of the 33 agent runs that started missed. It missed the SAX XXE and both SQL injections. It's an earlier, separate build, not the shipped patch.</li>
+        <li><b>The agent runs that started fixed what the ticket named.</b> All 33 closed the DOM XXE, Text4Shell, Zip Slip and both SQL injections, including the copy-pasted one the ticket didn't mention. 31 of them left both unnamed XXEs (StAX and SAX) open. Only Sonnet clones 2 and 3 closed all seven.</li>
+        <li><b>No two of the 40 agent patches are the same.</b> Haiku and MAI repeated one Log4Shell patch exactly, but here they wrote five different patches each. On a one-line fix they look deterministic; on a real ticket they drift like the rest. Different patches still often led to the same probe result: every Haiku, gpt-6-luna and kimi-k3 run scored the same.</li>
+        <li><b>Cost doesn't buy safety here.</b> Haiku's five runs cost 7.4 credits and grok's 320. Both left the unnamed XXEs open, and only grok's broke startup. <span class="see">Chart: “Cost for five runs”.</span></li>
+        <li><b>One line in the prompt stopped the outage, but not the gaps.</b> Asked to start the app before finishing, all 30 runs on six models did, and all 30 started, against 27 of 30 without the line. Three Haiku runs still chose 2.15.1, hit the startup error and fixed the code around it. Both unnamed XXEs stayed open in 27 of 30, and credits went up about a third. <span class="see">Table: “Does one line in the prompt fix it?”.</span></li>
+        <li><b>Naming the holes closed them, every time.</b> The canary: the same ticket with the three missing holes listed as findings 6 to 8. All 30 runs on six models closed all seven and started. So the agents could fix every hole; they had fixed what they were asked to. <span class="see">Table: “What gets an agent past the ticket?”.</span></li>
+        <li><b>One generic sentence nearly did the same.</b> “The scanner may have missed other instances of these same problems. Check the rest of the code for them and fix those too.” It names no hole, and 28 of 30 runs closed all seven. The two misses were MAI runs that each found one unnamed XXE but not the other. It cost the most: 507 credits for 30 runs, against 354 for the start-the-app line alone.</li>
+        <li><b>The canary holds.</b> The DOM XXE, Text4Shell and Zip Slip were closed by every run that started and by the recipe's code. So the tooling and the probe were working, and the gaps are real.</li>
+      </ol>
+      <p class="db-verdict"><b>Bottom line:</b> the agents' gaps were scope, not skill. Told to start the app, every agent did and the outages stopped; told to look past the ticket, 58 of 60 runs closed all seven holes. But each of those lines had to be written by someone who knew what was missing, and all 90 of those patches were still different from each other. The recipe gave the same bytes every time, and that was its failure here: one bad version choice, repeated exactly. It also missed three holes. Fixing the recipe once fixes every repo it runs on; fixing an agent's result means checking every run.</p>
+    </article>
+
+    <div class="db-grid">
+      <article class="db-card wide" id="l8b-matrix-card">
+        <h2>What the exploit probe found in each build</h2>
+        <p class="note">The built jar runs in a container with no network, and a probe outside the repo sends a real request and a real attack for each hole. Columns marked ◦ are holes the scanner ticket doesn't name. If the app doesn't start, nothing else can be probed.</p>
+        <div class="db-chart" data-draw="l8b-matrix" data-source="lab8b"></div>
+        <div class="db-legend" data-draw="l8b-legend" data-source="lab8b"></div>
+      </article>
+
+      <article class="db-card" id="l8b-cfg-card">
+        <h2>The upgrade that stops the app</h2>
+        <p class="note">Runs by the commons-configuration2 version they chose. 2.15.1 is the newest release, and its new URL-scheme allowlist rejects Spring Boot's <code>nested:</code> jar URLs. Unit tests still pass, so only starting the jar shows it.</p>
+        <div class="db-chart" data-draw="l8b-cfg-chart" data-source="l8b_cfg"></div>
+      </article>
+
+      <article class="db-card" id="l8b-credits-card">
+        <h2>Cost for five runs, by model</h2>
+        <p class="note">AI credits for the same ticket. The end label is the most holes any one of its started runs closed.</p>
+        <div class="db-chart" data-draw="l8b-credits-chart" data-source="l8b_by_model"></div>
+      </article>
+
+      <article class="db-card wide" id="l8b-prompts-card">
+        <h2>What gets an agent past the ticket?</h2>
+        <p class="note">The same six models, five fresh runs each, under four prompts. Each cell is <i>runs with all seven holes closed, of 5</i>, then the credits for those five runs. Every prompt after the first also asks the agent to start the app. <i>Named holes</i> lists the three holes the ticket left out; <i>Look past the ticket</i> adds only “The scanner may have missed other instances of these same problems. Check the rest of the code for them and fix those too.”</p>
+        <div class="db-scroll">
+          <table class="db-table" data-source="l8b_prompts" data-row-key="model">
+            <thead><tr>
+              <th data-field="model">Model</th><th data-field="ticket">Ticket only</th><th data-field="start">+ start the app</th>
+              <th data-field="named">+ named holes</th><th data-field="lookpast">+ look past the ticket</th>
+            </tr></thead>
+            <tbody data-draw="l8b-prompts"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="db-card wide" id="l8b-start-card">
+        <h2>Does one line in the prompt fix it?</h2>
+        <p class="note">The same ticket plus one sentence: “Before you finish, build the app jar (ledger-app) and start it to confirm it actually runs.” Six models, five fresh runs each, on 2026-10-31. Each cell is <i>without the line → with it</i>. <i>Ran the app</i> is read from each agent's own transcript.</p>
+        <div class="db-scroll">
+          <table class="db-table" data-source="l8b_start_compare" data-row-key="model">
+            <thead><tr>
+              <th data-field="model">Model</th><th data-field="started">App starts</th><th data-field="ran">Agent ran the app</th>
+              <th data-field="cfg215">Chose config2 2.15.1</th><th data-field="all7">All 7 safe</th><th data-field="credits">Credits (5 runs)</th>
+            </tr></thead>
+            <tbody data-draw="l8b-start-compare"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="db-card wide" id="l8b-start-table-card">
+        <h2>Every run with the extra line</h2>
+        <p class="note">Same probe, same harness. The three Haiku runs on 2.15.1 hit the startup error themselves and changed <code>LedgerSettings</code> to read its file from the classpath stream, so the app starts on the newest version.</p>
+        <div class="db-scroll">
+          <table class="db-table" data-source="lab8bstart" data-row-key="run">
+            <thead><tr>
+              <th data-field="run">Run</th><th data-field="model">Model</th><th data-field="agent_ran_jar">Ran the app</th><th data-field="startup">Starts</th>
+              <th data-field="xxe-dom">XXE DOM</th><th data-field="xxe-stax">XXE StAX ◦</th><th data-field="xxe-sax">XXE SAX ◦</th><th data-field="text4shell">Text4Shell</th>
+              <th data-field="zipslip">Zip Slip</th><th data-field="sqli-search">SQLi search</th><th data-field="sqli-overdrawn">SQLi overdrawn ◦</th>
+              <th data-field="cfg2">config2</th><th data-field="text">text</th><th class="n" data-field="files">Files</th><th data-field="patch">Patch</th>
+              <th class="n" data-field="credits">Credits</th><th class="n" data-field="seconds">Seconds</th>
+            </tr></thead>
+            <tbody data-draw="l8b-start-rows"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="db-card wide" id="l8b-variant-table-card">
+        <h2>Every run with named holes or “look past the ticket”</h2>
+        <p class="note">Run on 2026-11-02. Same probe, same harness. All 60 builds passed and all 60 apps started; the ten runs on commons-configuration2 2.15.1 changed the code so the app starts on it. No two patches are the same.</p>
+        <div class="db-scroll">
+          <table class="db-table" data-source="l8b_variant_rows" data-row-key="run">
+            <thead><tr>
+              <th data-field="prompt">Prompt</th><th data-field="run">Run</th><th data-field="model">Model</th><th data-field="startup">Starts</th>
+              <th data-field="xxe-dom">XXE DOM</th><th data-field="xxe-stax">XXE StAX ◦</th><th data-field="xxe-sax">XXE SAX ◦</th><th data-field="text4shell">Text4Shell</th>
+              <th data-field="zipslip">Zip Slip</th><th data-field="sqli-search">SQLi search</th><th data-field="sqli-overdrawn">SQLi overdrawn ◦</th>
+              <th data-field="cfg2">config2</th><th class="n" data-field="files">Files</th><th data-field="patch">Patch</th>
+              <th class="n" data-field="credits">Credits</th><th class="n" data-field="seconds">Seconds</th>
+            </tr></thead>
+            <tbody data-draw="l8b-variant-rows"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="db-card wide" id="l8b-table-card">
+        <h2>Every run</h2>
+        <p class="note">The recipe's five patches are byte-identical. Its build was probed once, on clone 1. The trial row is the recipe's code fixes with commons-configuration2 held at 2.7, from the harness's first validation, so the app starts.</p>
+        <div class="db-scroll">
+          <table class="db-table" data-source="lab8b" data-row-key="run">
+            <thead><tr>
+              <th data-field="run">Run</th><th data-field="model">Model</th><th data-field="startup">Starts</th>
+              <th data-field="xxe-dom">XXE DOM</th><th data-field="xxe-stax">XXE StAX ◦</th><th data-field="xxe-sax">XXE SAX ◦</th><th data-field="text4shell">Text4Shell</th>
+              <th data-field="zipslip">Zip Slip</th><th data-field="sqli-search">SQLi search</th><th data-field="sqli-overdrawn">SQLi overdrawn ◦</th>
+              <th data-field="cfg2">config2</th><th data-field="text">text</th><th class="n" data-field="files">Files</th><th data-field="patch">Patch</th>
+              <th class="n" data-field="credits">Credits</th><th class="n" data-field="seconds">Seconds</th><th class="n" data-field="recipe_still_changes">Recipe still changes</th>
+            </tr></thead>
+            <tbody data-draw="l8b-rows"></tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="db-page" id="method" role="tabpanel" aria-labelledby="tab-method" hidden>
+    <div class="db-grid">
+      <article class="db-card">
+        <h2>Lab 8 · Log4Shell</h2>
+        <ul class="db-notes">
+          <li>Target: spring-petclinic-microservices at <code>e8b747ab</code>, with <code>log4j-core 2.14.1</code> planted in customers-service. Five clones, all at the same baseline commit.</li>
+          <li>Agent prompt, word for word: “Our security scanner flagged CVE-2021-44228 (Log4Shell) in this repo. Fix it so the build still passes.”</li>
+          <li>Recipe: <code>lab.FixLog4Shell</code>, one <code>UpgradeDependencyVersion</code> to 2.26.1, run with the Moderne CLI 4.12.0.</li>
+          <li>Every result was built with <code>./mvnw verify</code>, inventoried with DependencyInsight, and then had the recipe run on top of it.</li>
+        </ul>
+      </article>
+      <article class="db-card">
+        <h2>Lab 8b · Scanner ticket</h2>
+        <ul class="db-notes">
+          <li>Target: a five-module Spring Boot 4 ledger app written for this lab in three team styles. No model can have seen it before.</li>
+          <li>The prompt is a scanner report with five findings and line numbers. It doesn't mention the StAX XXE, the SAX XXE or the copy-pasted SQL injection.</li>
+          <li>Recipe: <code>lab.LedgerScannerFindings</code> (dependency upgrades plus rewrite-java-security's XXE, Zip Slip and SQL injection recipes). The Moderne CLI refused this private repo, so it ran with the free OpenRewrite Maven plugin 6.46.1.</li>
+          <li>The probe is kept outside the repo, so no agent can fix to the test.</li>
+        </ul>
+      </article>
+      <article class="db-card wide">
+        <h2>What to keep in mind</h2>
+        <ul class="db-notes">
+          <li>Five runs per model is a small sample. It shows that drift happens and what shape it takes, not how often each fix appears in general.</li>
+          <li>Every model ran at medium reasoning effort, except kimi-k3, which rejects that setting and ran at its own default.</li>
+          <li>Runs that broke startup can't be probed, so whether their code fixes worked is unknown. Their patches are kept as written: no agent output was edited.</li>
+          <li>The first Lab 8 cross-check pass for the panel models failed because the recipe wasn't installed, and the harness recorded the failures as “nothing to change”. Those results were thrown out and rerun after the harness was fixed.</li>
+          <li>Side B ran before Side A, and the clones were scrubbed of all ignored files (including the recipe's own patch) before every agent session.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+</div>
+
+<script>
+// Tabs: the page's own sections; only hidden and aria-selected change.
+(() => {
+  const show = (id) => {
+    document.querySelectorAll('.db-page').forEach((s) => { s.hidden = s.id !== id; });
+    document.querySelectorAll('.db-tab').forEach((t) => t.setAttribute('aria-selected', String(t.getAttribute('aria-controls') === id)));
+    dash.setLink(id);
+  };
+  document.querySelectorAll('.db-tab').forEach((t) => t.addEventListener('click', () => show(t.getAttribute('aria-controls'))));
+  const want = location.hash.slice(1);
+  if (want && document.getElementById(want)?.classList.contains('db-page')) show(want);
+})();
+</script>
+
+<script>
+// Calcs: every headline number and grouped chart comes from the two run tables.
+const isAgent = (r) => r.model !== 'recipe' && r.model !== 'baseline' && !r.model.startsWith('recipe,');
+const num = (x) => (x === '' || x == null ? NaN : Number(x));
+const PROBES = ['xxe-dom', 'xxe-stax', 'xxe-sax', 'text4shell', 'zipslip', 'sqli-search', 'sqli-overdrawn'];
+window.dbConst = { isAgent, num, PROBES };
+
+dash.calc('l8_summary', {
+  title: 'Lab 8 headline counts',
+  description: 'Counts over the Lab 8 runs: agent runs, models, different fixes, passing builds, models with one fix in all five runs, removals, credits.',
+  inputs: ['lab8'],
+  fn: (lab8) => {
+    const a = lab8.filter((r) => r.model !== 'recipe');
+    const b = lab8.filter((r) => r.model === 'recipe');
+    const byModel = d3.group(a, (r) => r.model);
+    return [{
+      agent_runs: a.length,
+      models: byModel.size,
+      agent_fixes: new Set(a.map((r) => r.fix)).size,
+      recipe_fixes: new Set(b.map((r) => r.patch)).size,
+      agent_pass: a.filter((r) => r.build === 'PASS').length,
+      stable_models: [...byModel.values()].filter((rs) => rs.length === 5 && new Set(rs.map((r) => r.patch)).size === 1).length,
+      removed: a.filter((r) => r.log4j_core === 'none').length,
+      credits: Math.round(d3.sum(a, (r) => Number(r.credits) || 0)),
+    }];
+  },
+});
+
+dash.calc('l8_by_model', {
+  title: 'Lab 8 credits and fixes by model',
+  description: 'Sum of AI credits and number of different fixes over each model\'s five runs.',
+  inputs: ['lab8'],
+  fn: (lab8) => d3.rollups(lab8.filter((r) => r.model !== 'recipe'), (rs) => ({
+    credits: d3.sum(rs, (r) => Number(r.credits) || 0), fixes: new Set(rs.map((r) => r.fix)).size, runs: rs.length,
+  }), (r) => r.model).map(([model, v]) => ({ model, ...v })).sort((x, y) => y.credits - x.credits),
+});
+
+dash.calc('l8_versions', {
+  title: 'Lab 8 resolved log4j-core versions',
+  description: 'Agent runs by the log4j-core version their build resolves in customers-service ("none" = removed).',
+  inputs: ['lab8'],
+  fn: (lab8) => d3.rollups(lab8.filter((r) => r.model !== 'recipe'), (rs) => rs.length, (r) => r.log4j_core)
+    .map(([version, runs]) => ({ version, runs })).sort((x, y) => y.runs - x.runs),
+});
+
+dash.calc('l8b_summary', {
+  title: 'Lab 8b headline counts',
+  description: 'Counts over the Lab 8b agent runs: all seven probes safe, startup broken, different patches, passing builds, started runs with an unnamed XXE still open, credits.',
+  inputs: ['lab8b'],
+  fn: (lab8b) => {
+    const a = lab8b.filter((r) => !['recipe', 'baseline'].includes(r.model) && !r.model.startsWith('recipe,'));
+    const probes = ['xxe-dom', 'xxe-stax', 'xxe-sax', 'text4shell', 'zipslip', 'sqli-search', 'sqli-overdrawn'];
+    const started = a.filter((r) => r.startup === 'OK');
+    return [{
+      agent_runs: a.length,
+      all_safe: started.filter((r) => probes.every((p) => r[p] === 'SAFE')).length,
+      agent_broken: a.filter((r) => r.startup === 'BROKEN').length,
+      agent_patches: new Set(a.map((r) => r.patch)).size,
+      agent_pass: a.filter((r) => r.build === 'PASS').length,
+      unnamed_xxe_open: started.filter((r) => r['xxe-stax'] === 'VULNERABLE' || r['xxe-sax'] === 'VULNERABLE').length,
+      credits: Math.round(d3.sum(a, (r) => Number(r.credits) || 0)),
+    }];
+  },
+});
+
+dash.calc('l8b_cfg', {
+  title: 'Lab 8b startup by commons-configuration2 version',
+  description: 'Agent and recipe runs grouped by the commons-configuration2 version their patch sets, split by whether the app started.',
+  inputs: ['lab8b'],
+  fn: (lab8b) => d3.rollups(lab8b.filter((r) => r.model !== 'baseline' && !r.model.startsWith('recipe,') && r.cfg2), (rs) => ({
+    started: rs.filter((r) => r.startup === 'OK').length, broke: rs.filter((r) => r.startup === 'BROKEN').length,
+  }), (r) => r.cfg2).map(([cfg2, v]) => ({ cfg2, ...v }))
+    // 'removed' (the run deleted the library) sorts first, then versions oldest to newest.
+    .sort((x, y) => d3.ascending(...[x, y].map((r) => (/^[\d.]+$/.test(r.cfg2) ? r.cfg2.split('.').map(Number).reduce((s, n) => s * 100 + n, 0) : -1)))),
+});
+
+dash.calc('l8b_start_compare', {
+  title: 'Lab 8b with and without the start-the-app line',
+  description: 'For the six models run both ways: app starts, agent ran the app, chose commons-configuration2 2.15.1, all seven holes safe, and credits, each as "without → with" over five runs.',
+  inputs: ['lab8b', 'lab8bstart'],
+  fn: (lab8b, start) => {
+    const stats = (rs) => ({
+      started: rs.filter((r) => r.startup === 'OK').length,
+      ran: rs.filter((r) => r.agent_ran_jar === 'yes').length,
+      cfg215: rs.filter((r) => r.cfg2 === '2.15.1').length,
+      all7: rs.filter((r) => r.startup === 'OK' && PROBES.every((k) => r[k] === 'SAFE')).length,
+      credits: d3.sum(rs, (r) => Number(r.credits) || 0),
+    });
+    const models = [...new Set(start.map((r) => r.model))];
+    const rows = models.map((m) => [m, stats(lab8b.filter((r) => r.model === m && r.run.startsWith('A-'))), stats(start.filter((r) => r.model === m))]);
+    const fmt = (a, b, k) => (k === 'credits' ? `${a[k].toFixed(1)} → ${b[k].toFixed(1)}` : `${a[k]} → ${b[k]}`);
+    const line = (m, a, b) => ({ model: m, ...Object.fromEntries(['started', 'ran', 'cfg215', 'all7', 'credits'].map((k) => [k, fmt(a, b, k)])) });
+    const total = (i) => { const all = rows.map((r) => r[i]); return Object.fromEntries(Object.keys(all[0]).map((k) => [k, d3.sum(all, (x) => x[k])])); };
+    return [...rows.map(([m, a, b]) => line(m, a, b)), line('all six', total(1), total(2))];
+  },
+});
+
+dash.calc('l8b_prompts', {
+  title: 'Lab 8b by prompt',
+  description: 'For the six models run under every prompt: runs with all seven probes safe (of 5) and credits for the five runs, under the ticket alone, plus start-the-app, plus the named holes, and plus look-past-the-ticket.',
+  inputs: ['lab8b', 'lab8bstart', 'lab8bnamed', 'lab8blookpast'],
+  fn: (lab8b, start, named, lookpast) => {
+    const sets = { ticket: lab8b.filter((r) => r.run.startsWith('A-')), start, named, lookpast };
+    const cell = (rs) => {
+      const all7 = rs.filter((r) => r.startup === 'OK' && PROBES.every((k) => r[k] === 'SAFE')).length;
+      return { all7, n: rs.length, credits: d3.sum(rs, (r) => Number(r.credits) || 0) };
+    };
+    const fmt = (c) => `${c.all7} of ${c.n} · ${c.credits.toFixed(1)} cr`;
+    const models = [...new Set(lookpast.map((r) => r.model))];
+    const rows = models.map((m) => ({ model: m, ...Object.fromEntries(Object.entries(sets).map(([k, rs]) => [k, fmt(cell(rs.filter((r) => r.model === m)))])) }));
+    const all = Object.fromEntries(Object.entries(sets).map(([k, rs]) => [k, fmt(cell(rs.filter((r) => models.includes(r.model))))]));
+    return [...rows, { model: 'all six', ...all }];
+  },
+});
+
+dash.calc('l8b_variant_rows', {
+  title: 'Lab 8b named-holes and look-past runs',
+  description: 'Every run of the two 2026-11-02 prompts, with the prompt as a column.',
+  inputs: ['lab8bnamed', 'lab8blookpast'],
+  fn: (named, lookpast) => [...named.map((r) => ({ prompt: 'named holes', ...r })), ...lookpast.map((r) => ({ prompt: 'look past', ...r }))],
+});
+
+dash.calc('l8b_by_model', {
+  title: 'Lab 8b credits and best result by model',
+  description: 'Sum of AI credits per model, and the most probes any one of its started runs passed (of 7).',
+  inputs: ['lab8b'],
+  fn: (lab8b) => {
+    const probes = ['xxe-dom', 'xxe-stax', 'xxe-sax', 'text4shell', 'zipslip', 'sqli-search', 'sqli-overdrawn'];
+    return d3.rollups(lab8b.filter((r) => !['recipe', 'baseline'].includes(r.model) && !r.model.startsWith('recipe,')), (rs) => ({
+      credits: d3.sum(rs, (r) => Number(r.credits) || 0),
+      best: d3.max(rs.filter((r) => r.startup === 'OK'), (r) => probes.filter((p) => r[p] === 'SAFE').length) ?? 0,
+      broke: rs.filter((r) => r.startup === 'BROKEN').length,
+    }), (r) => r.model).map(([model, v]) => ({ model, ...v })).sort((x, y) => y.credits - x.credits);
+  },
+});
+</script>
+
+<script>
+// Headline numbers: one drawing per figure.
+(() => {
+  const fmt = d3.format(',');
+  const figure = (name, id, field) => dash.draw(name, (el) => {
+    const d = dash.data(id);
+    el.textContent = d.status === 'ok' && d.data[0] ? fmt(d.data[0][field]) : '—';
+  });
+  [['l8-agent-runs', 'agent_runs'], ['l8-models', 'models'], ['l8-fixes', 'agent_fixes'], ['l8-recipe-fixes', 'recipe_fixes'],
+   ['l8-pass', 'agent_pass'], ['l8-stable', 'stable_models'], ['l8-removed', 'removed'], ['l8-credits', 'credits']]
+    .forEach(([n, f]) => figure(n, 'l8_summary', f));
+  [['l8b-all-safe', 'all_safe'], ['l8b-runs', 'agent_runs'], ['l8b-broke', 'agent_broken'], ['l8b-distinct', 'agent_patches'],
+   ['l8b-pass', 'agent_pass'], ['l8b-xxe', 'unnamed_xxe_open'], ['l8b-credits', 'credits']]
+    .forEach(([n, f]) => figure(n, 'l8b_summary', f));
+})();
+</script>
+
+<script>
+// Shared chart helpers.
+window.dbChart = (() => {
+  const css = (el, v) => getComputedStyle(el).getPropertyValue(v).trim();
+  const fail = (el) => { el.replaceChildren(); const p = document.createElement('div'); p.className = 'db-fail'; p.textContent = 'Failed to load'; el.append(p); };
+  const tip = (el) => {
+    const t = document.createElement('div'); t.className = 'db-tip'; t.hidden = true; el.append(t);
+    return {
+      show(ev, lines) {
+        t.replaceChildren(...lines.map(([k, v], i) => {
+          const row = document.createElement('div');
+          if (i === 0) { row.className = 'k'; row.textContent = k; } else { row.textContent = `${k}: ${v}`; }
+          return row;
+        }));
+        t.hidden = false;
+        const box = el.getBoundingClientRect();
+        let x = ev.clientX - box.left + 12, y = ev.clientY - box.top + 12;
+        if (x + t.offsetWidth > box.width) x = Math.max(0, ev.clientX - box.left - t.offsetWidth - 12);
+        t.style.left = `${x}px`; t.style.top = `${y}px`;
+      },
+      hide() { t.hidden = true; },
+    };
+  };
+  const measure = (svg, texts, size) => {
+    const g = svg.append('g').attr('opacity', 0);
+    const w = d3.max(texts, (s) => g.append('text').attr('font-size', size).text(s).node().getComputedTextLength()) || 0;
+    g.remove(); return w;
+  };
+  const modelOrder = (models) => {
+    const first = ['recipe', 'claude-sonnet-5.5', 'claude-haiku-5.5'];
+    return [...new Set(models)].sort((a, b) => {
+      const ia = first.indexOf(a), ib = first.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || d3.ascending(a, b);
+    });
+  };
+  return { css, fail, tip, measure, modelOrder };
+})();
+</script>
+
+<script>
+// Lab 8: run matrix, coloured by fix.
+(() => {
+  const FIXES = ['Bump to 2.26.1', 'Remove the dependency', 'Drop the version (Boot picks 2.25.3)', 'Bump to 2.17.2',
+    'Use ${log4j2.version}, add log4j-api', 'Drop the version, add a comment'];
+  const color = (f) => dash.colors[Math.max(0, FIXES.indexOf(f)) % dash.colors.length];
+  window.dbFixColor = color; window.dbFixes = FIXES;
+
+  dash.draw('l8-matrix', (el) => {
+    const d = dash.data('lab8');
+    if (d.status === 'error') return dbChart.fail(el);
+    el.replaceChildren();
+    if (d.status !== 'ok') return;
+    const rows = d.data, W = el.clientWidth || 600;
+    const models = dbChart.modelOrder(rows.map((r) => r.model));
+    const svg = d3.select(el).append('svg').attr('width', '100%');
+    const fs = 13, labelW = dbChart.measure(svg, models, fs) + 12;
+    const cols = [1, 2, 3, 4, 5];
+    const cell = Math.max(18, Math.min(44, (W - labelW) / 5 - 6)), gap = 6, top = 20;
+    const H = top + models.length * (cell + gap);
+    const width = labelW + 5 * (cell + gap);
+    svg.attr('viewBox', `0 0 ${width} ${H}`).attr('height', null).style('max-width', `${width}px`);
+    svg.append('g').selectAll('text').data(cols).join('text')
+      .attr('class', 'muted').attr('font-size', 11).attr('text-anchor', 'middle')
+      .attr('x', (c) => labelW + (c - 1) * (cell + gap) + cell / 2).attr('y', 12).text((c) => `run ${c}`);
+    svg.append('g').selectAll('text').data(models).join('text')
+      .attr('font-size', fs).attr('x', 0).attr('y', (m, i) => top + i * (cell + gap) + cell / 2 + 4)
+      .attr('font-weight', (m) => (m === 'recipe' ? 600 : 400)).text((m) => m);
+    const t = dbChart.tip(el);
+    svg.append('g').selectAll('rect').data(rows).join('rect')
+      .attr('x', (r) => labelW + (Number(r.clone) - 1) * (cell + gap))
+      .attr('y', (r) => top + models.indexOf(r.model) * (cell + gap))
+      .attr('width', cell).attr('height', cell).attr('rx', 4)
+      .attr('fill', (r) => color(r.fix))
+      .on('pointermove', (ev, r) => t.show(ev, [[`${r.model} · run ${r.clone}`], ['Fix', r.fix], ['log4j-core', r.log4j_core],
+        ['Patch', r.patch], ['Credits', r.credits], ['Seconds', r.seconds || '—'], ['Recipe still changes', r.recipe_still_changes === '' ? 'not checked' : `${r.recipe_still_changes} file(s)`]]))
+      .on('pointerleave', () => t.hide());
+  });
+
+  dash.draw('l8-legend', (el) => {
+    const d = dash.data('lab8');
+    el.replaceChildren();
+    if (d.status !== 'ok') return;
+    const counts = d3.rollup(d.data.filter((r) => r.model !== 'recipe'), (rs) => rs.length, (r) => r.fix);
+    FIXES.filter((f) => counts.has(f) || d.data.some((r) => r.fix === f)).forEach((f) => {
+      const s = document.createElement('span'); const i = document.createElement('i');
+      i.style.background = color(f); s.append(i, `${f} · ${counts.get(f) ?? 0} agent run${counts.get(f) === 1 ? '' : 's'}`); el.append(s);
+    });
+  });
+})();
+</script>
+
+<script>
+// Horizontal bar chart used for both labs' cost-by-model cards.
+window.dbBars = (el, rows, label, endLabel) => {
+  el.replaceChildren();
+  const W = el.clientWidth || 400, bh = 22, gap = 10;
+  const svg = d3.select(el).append('svg').attr('width', '100%');
+  const lw = dbChart.measure(svg, rows.map(label), 12) + 10;
+  const ew = dbChart.measure(svg, rows.map(endLabel), 12) + 10;
+  const H = rows.length * (bh + gap);
+  svg.attr('viewBox', `0 0 ${W} ${H}`);
+  const x = d3.scaleLinear([0, d3.max(rows, (r) => r.credits) || 1], [0, Math.max(40, W - lw - ew)]);
+  const g = svg.selectAll('g').data(rows).join('g').attr('transform', (r, i) => `translate(0,${i * (bh + gap)})`);
+  g.append('text').attr('font-size', 12).attr('y', bh / 2 + 4).text(label);
+  g.append('rect').attr('x', lw).attr('height', bh).attr('rx', 3).attr('width', (r) => Math.max(1, x(r.credits)))
+    .attr('fill', (r) => dash.colors[0]);
+  g.append('text').attr('class', 'muted').attr('font-size', 12).attr('x', (r) => lw + x(r.credits) + 6).attr('y', bh / 2 + 4).text(endLabel);
+};
+
+dash.draw('l8-credits-chart', (el) => {
+  const d = dash.data('l8_by_model');
+  if (d.status === 'error') return dbChart.fail(el);
+  if (d.status !== 'ok') return el.replaceChildren();
+  dbBars(el, d.data, (r) => r.model, (r) => `${d3.format('.1f')(r.credits)} · ${r.fixes} fix${r.fixes === 1 ? '' : 'es'}`);
+});
+
+dash.draw('l8b-credits-chart', (el) => {
+  const d = dash.data('l8b_by_model');
+  if (d.status === 'error') return dbChart.fail(el);
+  if (d.status !== 'ok') return el.replaceChildren();
+  dbBars(el, d.data, (r) => r.model, (r) => `${d3.format('.1f')(r.credits)} · best ${r.best}/7${r.broke ? ` · ${r.broke} won't start` : ''}`);
+});
+
+dash.draw('l8-version-chart', (el) => {
+  const d = dash.data('l8_versions');
+  if (d.status === 'error') return dbChart.fail(el);
+  el.replaceChildren();
+  if (d.status !== 'ok') return;
+  const rows = d.data.map((r) => ({ ...r, credits: r.runs, name: r.version === 'none' ? 'removed (none)' : r.version }));
+  dbBars(el, rows, (r) => r.name, (r) => `${r.runs} run${r.runs === 1 ? '' : 's'}`);
+});
+</script>
+
+<script>
+// Lab 8b: verdict matrix and the config2 chart.
+(() => {
+  const COLS = [['startup', 'Starts'], ['xxe-dom', 'XXE DOM'], ['xxe-stax', 'XXE StAX ◦'], ['xxe-sax', 'XXE SAX ◦'], ['text4shell', 'Text4Shell'],
+    ['zipslip', 'Zip Slip'], ['sqli-search', 'SQLi search'], ['sqli-overdrawn', 'SQLi overdrawn ◦']];
+  const fill = (el, v) => {
+    if (v === 'SAFE' || v === 'OK') return dbChart.css(el, '--color-ok');
+    if (v === 'VULNERABLE' || v === 'BROKEN') return dbChart.css(el, '--cds-chart-status-critical') || dbChart.css(el, '--color-bad');
+    return dbChart.css(el, '--cds-chart-muted');
+  };
+  const rowName = (r) => (r.model === 'baseline' ? 'baseline (before any fix)'
+    : r.model === 'recipe' ? 'recipe as shipped (5 identical patches)'
+    : r.model.startsWith('recipe,') ? 'recipe code only, config2 kept at 2.7 (trial)' : `${r.model} · ${r.clone}`);
+
+  dash.draw('l8b-matrix', (el) => {
+    const d = dash.data('lab8b');
+    if (d.status === 'error') return dbChart.fail(el);
+    el.replaceChildren();
+    if (d.status !== 'ok') return;
+    const order = dbChart.modelOrder(d.data.map((r) => r.model).filter((m) => m !== 'baseline' && !m.startsWith('recipe,')));
+    const rank = (r) => (r.model === 'baseline' ? -1 : r.model.startsWith('recipe,') ? 0.5 : order.indexOf(r.model));
+    // The recipe's five patches are byte-identical and its build was probed once, so it gets one row.
+    const rows = d.data.filter((r) => r.model !== 'recipe' || r.clone === '1')
+      .sort((a, b) => rank(a) - rank(b) || Number(a.clone) - Number(b.clone));
+    const W = el.clientWidth || 700;
+    const svg = d3.select(el).append('svg').attr('width', '100%');
+    const fs = 12, labelW = dbChart.measure(svg, rows.map(rowName), fs) + 12;
+    const ch = 16, gap = 4, top = 74;
+    const cw = Math.max(22, Math.min(64, (W - labelW) / COLS.length - gap));
+    const width = labelW + COLS.length * (cw + gap), H = top + rows.length * (ch + gap);
+    svg.attr('viewBox', `0 0 ${width} ${H}`).style('max-width', `${width}px`);
+    svg.append('g').selectAll('text').data(COLS).join('text')
+      .attr('class', 'muted').attr('font-size', 11)
+      .attr('transform', (c, i) => `translate(${labelW + i * (cw + gap) + cw / 2 + 4},${top - 6}) rotate(-50)`)
+      .text((c) => c[1]);
+    svg.append('g').selectAll('text').data(rows).join('text')
+      .attr('font-size', fs).attr('x', 0).attr('y', (r, i) => top + i * (ch + gap) + ch / 2 + 4)
+      .attr('font-weight', (r) => (r.model === 'recipe' || r.model.startsWith('recipe,') || r.model === 'baseline' ? 600 : 400)).text(rowName);
+    const t = dbChart.tip(el);
+    const cells = rows.flatMap((r, i) => COLS.map(([k, label], j) => ({ r, i, j, k, label, v: r[k] })));
+    svg.append('g').selectAll('rect').data(cells).join('rect')
+      .attr('x', (c) => labelW + c.j * (cw + gap)).attr('y', (c) => top + c.i * (ch + gap))
+      .attr('width', cw).attr('height', ch).attr('rx', 3).attr('fill', (c) => fill(el, c.v))
+      .attr('fill-opacity', (c) => (c.v === 'NOT RUN' ? 0.45 : 0.9))
+      .on('pointermove', (ev, c) => t.show(ev, [[rowName(c.r)], [c.label, c.v || '—'], ['config2', c.r.cfg2 || '—'], ['commons-text', c.r.text || '—'],
+        ['Build', c.r.build], ['Credits', c.r.credits]]))
+      .on('pointerleave', () => t.hide());
+  });
+
+  dash.draw('l8b-legend', (el) => {
+    const d = dash.data('lab8b');
+    el.replaceChildren();
+    if (d.status !== 'ok') return;
+    [['SAFE', 'Safe: the feature works and the attack fails'], ['VULNERABLE', 'Vulnerable, or the app won\'t start'], ['NOT RUN', 'Not probed: the app didn\'t start']].forEach(([v, text]) => {
+      const s = document.createElement('span'); const i = document.createElement('i');
+      i.style.background = fill(el, v); if (v === 'NOT RUN') i.style.opacity = '.45'; s.append(i, text); el.append(s);
+    });
+  });
+
+  dash.draw('l8b-cfg-chart', (el) => {
+    const d = dash.data('l8b_cfg');
+    if (d.status === 'error') return dbChart.fail(el);
+    el.replaceChildren();
+    if (d.status !== 'ok') return;
+    const rows = d.data, W = el.clientWidth || 400, bh = 22, gap = 10;
+    const svg = d3.select(el).append('svg').attr('width', '100%');
+    const lw = dbChart.measure(svg, rows.map((r) => r.cfg2), 12) + 10;
+    const ends = rows.map((r) => `${r.started} started · ${r.broke} won't start`);
+    const ew = dbChart.measure(svg, ends, 12) + 10;
+    svg.attr('viewBox', `0 0 ${W} ${rows.length * (bh + gap)}`);
+    const x = d3.scaleLinear([0, d3.max(rows, (r) => r.started + r.broke) || 1], [0, Math.max(40, W - lw - ew)]);
+    const g = svg.selectAll('g').data(rows).join('g').attr('transform', (r, i) => `translate(0,${i * (bh + gap)})`);
+    g.append('text').attr('font-size', 12).attr('y', bh / 2 + 4).text((r) => r.cfg2);
+    g.append('rect').attr('x', lw).attr('height', bh).attr('rx', 3).attr('width', (r) => x(r.started)).attr('fill', fill(el, 'SAFE'));
+    g.append('rect').attr('x', (r) => lw + x(r.started)).attr('height', bh).attr('rx', 3).attr('width', (r) => x(r.broke)).attr('fill', fill(el, 'BROKEN'));
+    g.append('text').attr('class', 'muted').attr('font-size', 12).attr('x', (r) => lw + x(r.started + r.broke) + 6).attr('y', bh / 2 + 4)
+      .text((r, i) => ends[i]);
+  });
+})();
+</script>
+
+<script>
+// Tables: one row per run, words only.
+(() => {
+  const table = (name, id, cols) => dash.draw(name, (tb) => {
+    const d = dash.data(id);
+    tb.replaceChildren();
+    if (d.status !== 'ok') return;
+    d.data.forEach((r) => {
+      const tr = document.createElement('tr');
+      cols.forEach(([k, right]) => { const td = document.createElement('td'); if (right) td.className = 'n'; td.textContent = r[k] ?? ''; tr.append(td); });
+      tb.append(tr);
+    });
+  });
+  table('l8-rows', 'lab8', [['run'], ['model'], ['fix'], ['log4j_core'], ['patch'], ['build'], ['credits', 1], ['seconds', 1], ['recipe_still_changes', 1]]);
+  table('l8b-rows', 'lab8b', [['run'], ['model'], ['startup'], ['xxe-dom'], ['xxe-stax'], ['xxe-sax'], ['text4shell'], ['zipslip'], ['sqli-search'],
+    ['sqli-overdrawn'], ['cfg2'], ['text'], ['files', 1], ['patch'], ['credits', 1], ['seconds', 1], ['recipe_still_changes', 1]]);
+  table('l8b-prompts', 'l8b_prompts', [['model'], ['ticket'], ['start'], ['named'], ['lookpast']]);
+  table('l8b-variant-rows', 'l8b_variant_rows', [['prompt'], ['run'], ['model'], ['startup'], ['xxe-dom'], ['xxe-stax'], ['xxe-sax'], ['text4shell'], ['zipslip'],
+    ['sqli-search'], ['sqli-overdrawn'], ['cfg2'], ['files', 1], ['patch'], ['credits', 1], ['seconds', 1]]);
+  table('l8b-start-compare', 'l8b_start_compare', [['model'], ['started'], ['ran'], ['cfg215'], ['all7'], ['credits']]);
+  table('l8b-start-rows', 'lab8bstart', [['run'], ['model'], ['agent_ran_jar'], ['startup'], ['xxe-dom'], ['xxe-stax'], ['xxe-sax'], ['text4shell'], ['zipslip'],
+    ['sqli-search'], ['sqli-overdrawn'], ['cfg2'], ['text'], ['files', 1], ['patch'], ['credits', 1], ['seconds', 1]]);
+})();
+</script>
+
+</body>
+</html>
