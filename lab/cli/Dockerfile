@@ -11,7 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends git curl unzip 
 # The scripts build with your uid/gid (LAB_UID/LAB_GID) so files in the bind-mounted /ws stay owned by you.
 ARG LAB_UID=1000
 ARG LAB_GID=1000
-RUN groupadd -o -g "$LAB_GID" lab && useradd -m -o -u "$LAB_UID" -g lab lab
+# The temurin base (Ubuntu) ships an `ubuntu` user at uid 1000. If lab shares that uid, the CLI installer
+# resolves the home to /home/ubuntu and `mod` lands off PATH. Drop it first so uid 1000 hosts build too.
+RUN (userdel -r ubuntu 2>/dev/null; groupdel ubuntu 2>/dev/null; true) \
+ && groupadd -o -g "$LAB_GID" lab && useradd -m -o -u "$LAB_UID" -g lab lab
 USER lab
 WORKDIR /home/lab
 # Installer skips the browser login when there is no TTY; log in with a token later if wanted.
