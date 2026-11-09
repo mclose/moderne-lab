@@ -14,10 +14,12 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o 
  && rm -rf /var/lib/apt/lists/*
 ENV JAVA_HOME=/usr/lib/jvm/temurin-21 PATH="/usr/lib/jvm/temurin-21/bin:/home/node/.local/bin:${PATH}"
 # The scripts build with your uid/gid (LAB_UID/LAB_GID) and run as you, so give that uid a real home.
-# -o: the node base image already has uid 1000 (`node`).
+# The node base image ships `node` at uid 1000. If lab shares that uid, lab resolves as node and
+# HOME is /home/node, so the /home/lab mounts (Maven cache) go unused. Drop node first.
 ARG LAB_UID=1000
 ARG LAB_GID=1000
-RUN groupadd -o -g "$LAB_GID" lab && useradd -m -o -u "$LAB_UID" -g lab -s /bin/bash lab
+RUN (userdel -r node 2>/dev/null; groupdel node 2>/dev/null; true) \
+ && groupadd -o -g "$LAB_GID" lab && useradd -m -o -u "$LAB_UID" -g lab -s /bin/bash lab
 USER lab
 WORKDIR /home/lab
 ENV PATH="/home/lab/.local/bin:/home/lab/bin:${PATH}"

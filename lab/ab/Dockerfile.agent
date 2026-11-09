@@ -12,10 +12,12 @@ ARG COPILOT_VERSION=1.0.105
 RUN npm install -g --no-fund --no-audit "@github/copilot@${COPILOT_VERSION}" && npm cache clean --force
 ENV COPILOT_AUTO_UPDATE=false
 # The scripts build with your uid/gid (LAB_UID/LAB_GID) so files in the bind-mounted /ws stay owned by you.
-# -o: the node base image already has uid 1000.
+# The node base image ships `node` at uid 1000. If lab shares that uid, lab resolves as node and
+# HOME is /home/node, so the /home/lab mounts (Maven cache) go unused. Drop node first.
 ARG LAB_UID=1000
 ARG LAB_GID=1000
-RUN groupadd -o -g "$LAB_GID" lab && useradd -m -o -u "$LAB_UID" -g lab -s /bin/bash lab
+RUN (userdel -r node 2>/dev/null; groupdel node 2>/dev/null; true) \
+ && groupadd -o -g "$LAB_GID" lab && useradd -m -o -u "$LAB_UID" -g lab -s /bin/bash lab
 USER lab
 WORKDIR /home/lab
 # ~/.m2 exists in the image so the moderne-lab-ab-m2 volume is created owned by lab, not root.
