@@ -27,6 +27,11 @@ esac
 docker image inspect moderne-lab-cli >/dev/null 2>&1 || docker build --build-arg LAB_UID="$(id -u)" --build-arg LAB_GID="$(id -g)" -t moderne-lab-cli "$HERE"
 mkdir -p "$DEMO/logs"
 
+# The image has no recipe catalog; Lab 2 fills one in the moderne-lab-home volume. Install what the demo needs
+# so it also runs on a machine that skipped Lab 2. Both runs below then use the same installed version.
+step "recipes: rewrite-migrate-java"
+mod_in "" recipes "mod config recipes jar install org.openrewrite.recipe:rewrite-migrate-java:RELEASE"
+
 for r in run1 run2; do
   step "$r: clone, build, $R21"
   git clone -q "$REPO" "$DEMO/$r/spring-petclinic-microservices"

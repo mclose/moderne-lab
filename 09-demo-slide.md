@@ -16,6 +16,11 @@ Results below are from **2026-10-28 on Moderne CLI 4.12.0**, `rewrite-migrate-ja
 7 min 19 s. Same patch sha256 `8456b8ed…283235` as on 2026-10-28, 4 files changed, empty rerun, `mvnw verify` exit 0 on JDK 21,
 and the same 5 tag-pinned actions. A week and a CLI patch release apart, the patch didn't change.
 
+**Rerun 2026-11-09 on Moderne CLI 4.12.6, on a fresh 8-vCPU cloud box that never ran Lab 2** (uid 1000): `demo.sh`
+passed in 11 min, recipe install included. Same patch sha256 `8456b8ed…283235`, 4 files changed, empty rerun, `mvnw verify`
+exit 0, same 5 tag-pinned actions. `demo.sh` now installs `rewrite-migrate-java` itself; before, it relied on Lab 2
+having filled the `moderne-lab-home` volume and failed with `No recipes are installed` without it.
+
 ## The whole thing in one command
 
 ```bash
